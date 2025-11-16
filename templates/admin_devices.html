@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理員後台 - 設備綁定審核</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 220px;
+      background: #0f172a;
+      padding: 18px 16px;
+      box-sizing: border-box;
+      border-right: 1px solid #1f2937;
+    }
+    .main {
+      flex: 1;
+      padding: 16px 18px 24px;
+      box-sizing: border-box;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .admin-name {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+    .nav-link {
+      display: block;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: #e5e7eb;
+      text-decoration: none;
+      margin-bottom: 4px;
+    }
+    .nav-link.active {
+      background: #1d4ed8;
+    }
+    .nav-link:hover {
+      background: #111827;
+    }
+    .logout {
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    th, td {
+      border-bottom: 1px solid #1f2937;
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      font-weight: 600;
+      color: #9ca3af;
+      font-size: 11px;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn.approve {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+    .btn.reject {
+      background: #b91c1c;
+      border-color: #b91c1c;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    form.inline {
+      display: inline-block;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="logo">抽卡後台</div>
+      <div class="admin-name">管理員：{{ admin_name }}</div>
+
+      <a href="{{ url_for('admin_users') }}" class="nav-link">用戶列表</a>
+      <a href="{{ url_for('admin_devices') }}" class="nav-link active">設備綁定審核</a>
+
+      <div class="logout">
+        <a href="{{ url_for('admin_logout') }}" class="nav-link">登出</a>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="page-title">待審核設備綁定</div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>申請ID</th>
+            <th>用戶ID</th>
+            <th>姓名</th>
+            <th>登入名</th>
+            <th>設備ID</th>
+            <th>申請時間</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if pending_devices %}
+            {% for p in pending_devices %}
+            <tr>
+              <td class="mono">{{ p.pending_id }}</td>
+              <td class="mono">{{ p.user_id }}</td>
+              <td>{{ p.name }}</td>
+              <td class="mono">{{ p.login_name }}</td>
+              <td class="mono">{{ p.device_identifier }}</td>
+              <td class="mono">{{ p.created_at }}</td>
+              <td>
+                <form
+                  class="inline"
+                  method="post"
+                  action="{{ url_for('admin_approve_device', pending_id=p.pending_id) }}"
+                >
+                  <button class="btn approve" type="submit">允許此設備</button>
+                </form>
+                <form
+                  class="inline"
+                  method="post"
+                  action="{{ url_for('admin_reject_device', pending_id=p.pending_id) }}"
+                  style="margin-left:4px;"
+                >
+                  <button class="btn reject" type="submit">拒絕</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="7" style="font-size:12px; color:#9ca3af;">
+                目前沒有待審核的設備綁定申請。
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

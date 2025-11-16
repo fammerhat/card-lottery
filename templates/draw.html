@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>财神赐福狂欢抽卡</title>
+  <style>
+    :root {
+      --bg: radial-gradient(circle at top, #1f2937, #020617);
+      --accent: #fbbf24;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+    }
+    .app {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 23, 42, 0.96);
+      border-radius: 22px;
+      padding: 18px 16px 22px;
+      position: relative;
+      box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(148, 163, 184, 0.5);
+      overflow: hidden;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .user-tag {
+      font-size: 12px;
+      color: var(--accent);
+    }
+    .stats {
+      margin-top: 6px;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 8px;
+    }
+    .stat-card {
+      flex: 1;
+      background: rgba(15, 23, 42, 0.96);
+      border-radius: 14px;
+      padding: 8px 10px;
+      border: 1px solid rgba(51, 65, 81, 0.9);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .stat-value {
+      font-size: 17px;
+      font-weight: 700;
+    }
+    .draw-area {
+      margin-top: 4px;
+      background: rgba(15, 23, 42, 0.96);
+      border-radius: 18px;
+      padding: 12px 10px 14px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+    .draw-desc {
+      font-size: 11px;
+      color: var(--text-main);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .button {
+      width: 100%;
+      padding: 13px;
+      border-radius: 999px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      color: #020617;
+      background: linear-gradient(135deg, #facc15, #fb923c);
+      box-shadow:
+        0 14px 30px rgba(0, 0, 0, 0.9),
+        0 0 0 1px rgba(251, 191, 36, 0.7);
+      cursor: pointer;
+      margin-top: 4px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .button:disabled {
+      opacity: 0.45;
+      cursor: default;
+      box-shadow: none;
+    }
+    .button:active:enabled {
+      transform: translateY(1px);
+    }
+    .owned-section {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--text-main);
+    }
+    .owned-grid {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .owned-slot {
+      width: 100%;
+      padding-top: 100%;
+      position: relative;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      overflow: hidden;
+    }
+    .owned-slot img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    /* Modal */
+    #resultModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    .modal-card {
+      width: 90%;
+      max-width: 360px;
+      background: rgba(15, 23, 42, 0.98);
+      border-radius: 20px;
+      padding: 16px 14px 14px;
+      box-shadow:
+        0 26px 40px rgba(0, 0, 0, 0.9),
+        0 0 0 1px rgba(148, 163, 184, 0.5);
+      text-align: center;
+    }
+    .modal-title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .modal-image-wrapper {
+      width: 70%;
+      max-width: 220px;
+      margin: 0 auto 10px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(251, 191, 36, 0.7);
+    }
+    .modal-image-wrapper img {
+      width: 100%;
+      display: block;
+    }
+    .modal-text {
+      font-size: 14px;
+      color: var(--text-main);
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+    .modal-button {
+      width: 100%;
+      padding: 11px;
+      border-radius: 999px;
+      border: none;
+      font-size: 15px;
+      font-weight: 600;
+      color: #020617;
+      background: linear-gradient(135deg, #facc15, #fb923c);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="content">
+<div class="header-row">
+  <div class="title-block">
+    <div class="title">财神赐福狂欢抽卡</div>
+    <div class="subtitle">
+      今日幸運玩家：<span class="user-tag">{{ name }}</span>
+    </div>
+  </div>
+  <a
+    href="{{ url_for('user_logout') }}"
+    style="
+      font-size: 11px;
+      color: #9ca3af;
+      text-decoration: none;
+      border-radius: 999px;
+      border: 1px solid #4b5563;
+      padding: 4px 8px;
+    "
+  >
+    退出登入
+  </a>
+</div>
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-label">剩餘抽卡次數</div>
+          <div class="stat-value" id="remainingValue">{{ remaining }}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">已消耗抽卡</div>
+          <div class="stat-value" id="consumedValue">{{ consumed }}</div>
+        </div>
+      </div>
+
+      <div class="draw-area">
+        <div class="draw-desc">
+          集齊五路财神，即可額外解鎖大礼包。
+        </div>
+
+        <button
+          id="drawButton"
+          class="button"
+          {% if remaining <= 0 %}disabled{% endif %}
+        >
+          {% if remaining > 0 %}
+          開始抽卡
+          {% else %}
+          抽卡次數用完啦，快去邀人加次數
+          {% endif %}
+        </button>
+      </div>
+
+      <div class="owned-section">
+        已擁有的财神卡：
+        <div class="owned-grid" id="cardsContainer">
+          <!-- 初始 6 個框，JS 會根據後端傳入的 owned_cards 填圖 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽卡結果彈窗 -->
+  <div id="resultModal">
+    <div class="modal-card">
+      <div id="modalTitle" class="modal-title">抽卡結果</div>
+      <div class="modal-image-wrapper">
+        <img id="cardImage" src="" alt="card" />
+      </div>
+      <div id="modalText" class="modal-text">
+        恭喜獲得【某某卡】财神卡！
+      </div>
+      <button id="modalConfirm" class="modal-button">領取</button>
+    </div>
+  </div>
+
+  <script>
+    const drawButton = document.getElementById("drawButton");
+    const remainingEl = document.getElementById("remainingValue");
+    const consumedEl = document.getElementById("consumedValue");
+    const cardsContainer = document.getElementById("cardsContainer");
+
+    const modal = document.getElementById("resultModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalText = document.getElementById("modalText");
+    const modalConfirm = document.getElementById("modalConfirm");
+    const cardImage = document.getElementById("cardImage");
+
+    const CARD_NAMES = {
+      1: "關羽",
+      2: "比干",
+      3: "趙公明",
+      4: "柴榮",
+      5: "王亥",
+      6: "五路財神"
+    };
+
+    const CARD_IMAGES = {
+      1: "{{ url_for('static', filename='cards/card1.png') }}",
+      2: "{{ url_for('static', filename='cards/card2.png') }}",
+      3: "{{ url_for('static', filename='cards/card3.png') }}",
+      4: "{{ url_for('static', filename='cards/card4.png') }}",
+      5: "{{ url_for('static', filename='cards/card5.png') }}",
+      6: "{{ url_for('static', filename='cards/card6.png') }}"
+    };
+
+    const TOTAL_CARDS = 6;
+
+    function showModal(title, text, imgUrl) {
+      modalTitle.textContent = title;
+      modalText.innerHTML = text;
+      cardImage.src = imgUrl || "";
+      modal.style.display = "flex";
+    }
+
+    function hideModal() {
+      modal.style.display = "none";
+    }
+
+    function renderOwnedGrid(ownedIds) {
+      const ownedSet = new Set(ownedIds || []);
+      cardsContainer.innerHTML = "";
+      for (let cid = 1; cid <= TOTAL_CARDS; cid++) {
+        const slot = document.createElement("div");
+        slot.className = "owned-slot";
+        if (ownedSet.has(cid)) {
+          const img = document.createElement("img");
+          const imgUrl = CARD_IMAGES[cid] || "";
+          if (imgUrl) {
+            img.src = imgUrl;
+          }
+          img.alt = "卡 " + cid;
+          slot.appendChild(img);
+        }
+        cardsContainer.appendChild(slot);
+      }
+    }
+
+    async function handleDraw() {
+      if (!drawButton || drawButton.disabled) return;
+
+      drawButton.disabled = true;
+
+      try {
+        const resp = await fetch("/api/draw", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({})
+        });
+
+        const data = await resp.json();
+
+        if (!data.success) {
+          if (data.error === "NO_TIMES") {
+            drawButton.disabled = true;
+            drawButton.textContent = "抽卡次數用完啦，快去邀人加次數";
+            showModal("提示", "抽卡次數用完啦，快去邀人加次數！", "");
+          } else if (data.error === "NOT_LOGIN") {
+            showModal("提示", "登录失效，請返回重新登入。", "");
+          } else {
+            showModal("錯誤", "網路或伺服器發生問題，請稍後再試。", "");
+          }
+          return;
+        }
+
+        // 更新次數
+        remainingEl.textContent = data.remaining;
+        consumedEl.textContent = data.consumed;
+
+        if (data.remaining <= 0) {
+          drawButton.disabled = true;
+          drawButton.textContent = "抽卡次數用完啦，快去邀人加次數";
+        } else {
+          drawButton.disabled = false;
+          drawButton.textContent = "開始抽卡";
+        }
+
+        // 更新已擁有卡圖片（固定 6 個框）
+        renderOwnedGrid(data.owned_cards || []);
+
+        const cardName = CARD_NAMES[data.card_id] || ("卡 " + data.card_id);
+        const imgUrl = CARD_IMAGES[data.card_id] || "";
+        let textHtml = `恭喜獲得【${cardName}】财神卡！`;
+
+        if (data.bonus_card6) {
+          textHtml += "<br/><br/>恭喜{{ name }}解鎖五路財神卡，一路發發發！";
+        }
+
+        showModal("抽卡結果", textHtml, imgUrl);
+      } catch (e) {
+        console.error(e);
+        showModal("錯誤", "網路或伺服器發生問題，請稍後再試。", "");
+      } finally {
+        const remaining = parseInt(remainingEl.textContent || "0", 10);
+        if (remaining > 0) {
+          drawButton.disabled = false;
+        }
+      }
+    }
+
+    if (drawButton) {
+      drawButton.addEventListener("click", handleDraw);
+    }
+    if (modalConfirm) {
+      modalConfirm.addEventListener("click", hideModal);
+    }
+
+    // 從後端拿到歷史已擁有卡（Jinja 注入）
+    const initialOwned = {{ owned_cards|tojson }};
+    renderOwnedGrid(initialOwned);
+  </script>
+</body>
+</html>
