@@ -412,8 +412,8 @@
       showLoadingOverlay(true);
 
       try {
-        // 保證「抽卡中」動畫至少顯示 5 秒
-        const wait5s = new Promise((resolve) => setTimeout(resolve, 3000));
+        // 保證「抽卡中」動畫至少顯示 3 秒
+        const wait3s = new Promise((resolve) => setTimeout(resolve, 3000));
 
         const fetchPromise = fetch("/api/draw", {
           method: "POST",
