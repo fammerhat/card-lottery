@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>11 月财神赐福狂欢季</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+      color: #fff;
+      padding: 16px;
+      position: relative;
+      overflow-x: hidden;
+    }
+    /* 背景裝飾元素 */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(251, 191, 36, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 90% 80%, rgba(251, 191, 36, 0.12) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(234, 179, 8, 0.1) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      padding-top: 8px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 6px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      letter-spacing: 0.05em;
+    }
+    .subtitle {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fef3c7;
+      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+      line-height: 1.4;
+    }
+    .guide-section {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      padding: 16px 14px 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+    .guide-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #dc2626;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .step {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+      align-items: flex-start;
+    }
+    .step:last-child {
+      margin-bottom: 0;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
+    }
+    .step-content {
+      flex: 1;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1f2937;
+    }
+    .step-content strong {
+      color: #dc2626;
+      font-weight: 700;
+    }
+    .buttons-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+      text-decoration: none;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn:active {
+      transform: translateY(1px);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #facc15, #fb923c);
+      color: #1f2937;
+    }
+    .btn-secondary {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+    }
+    .btn-tertiary {
+      background: linear-gradient(135deg, #16a34a, #15803d);
+    }
+    .emoji {
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="title">11 月财神赐福狂欢季！</div>
+      <div class="subtitle">3 元起领红包，50 元大额奖 + 战队福利双暴击</div>
+    </div>
+
+    <div class="guide-section">
+      <div class="guide-title">活动速通指南</div>
+
+      <div class="step">
+        <div class="step-number">①</div>
+        <div class="step-content">
+          <strong>入群即赚：</strong>进群点下方抽财神卡，解锁初始财神卡；用ai生成你自己的财神形象手办，并在问卷中上传，领3元红包。
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">②</div>
+        <div class="step-content">
+          <strong>邀友共赢：</strong>邀请公司内部员工入群，好友完成传图，你得财神卡，每获一种不同的财神卡并上传对应财神生成图，可兑 3 元红包（好友已入其他战队无效）。
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">③</div>
+        <div class="step-content">
+          <strong>集卡加码：</strong>集齐5种财神卡生成五路财神图，直接解锁 50 元大额红包。
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-number">④</div>
+        <div class="step-content">
+          <strong>战队 PK：</strong>每日排名前进 1 名，群内每人得 3 元；最终战队第 1 名每人 再得30 元、第 2 名 10 元、第 3 名 5 元。
+        </div>
+      </div>
+    </div>
+
+    <div class="buttons-section">
+      <a href="https://card-lottery-h3k2.onrender.com/login" class="btn btn-primary">
+        <span class="emoji">🧧</span>
+        点击抽财神卡
+      </a>
+
+      <a href="https://yuyue.wjx.cn/vm/rNKL6T7.aspx#" target="_blank" class="btn btn-secondary">
+        <span class="emoji">📸</span>
+        上传财神图片
+      </a>
+
+      <a href="https://v.wjx.cn/vm/OPVi0CD.aspx#" target="_blank" class="btn btn-tertiary">
+        <span class="emoji">🤝</span>
+        邀请好友抽卡
+      </a>
+    </div>
+  </div>
+</body>
+</html>

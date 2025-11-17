@@ -121,7 +121,13 @@ def log_admin_action(admin_name: str, action: str):
 
 # --- 使用者登入 / 登出（前台） ---
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/")
+def landing_page():
+    """活動入口頁"""
+    return render_template("landing.html")
+
+
+@app.route("/login", methods=["GET", "POST"])
 def user_login_page():
     # 已登入且 session 未過期，直接進抽卡頁
     if request.method == "GET" and session.get("user_id"):
