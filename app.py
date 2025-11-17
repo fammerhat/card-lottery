@@ -138,10 +138,16 @@ def user_login_page():
     if request.method == "POST":
         name = (request.form.get("name") or "").strip()
         phone_last4 = (request.form.get("phone_last4") or "").strip()
+        team = (request.form.get("team") or "").strip()
 
         if not name or not phone_last4 or len(phone_last4) != 4 or not phone_last4.isdigit():
             error = "請輸入正確的姓名和手機後四位。"
-            return render_template("user_login.html", error=error)
+            return render_template(
+                "user_login.html",
+                error=error,
+                team_choices=TEAM_CHOICES,
+                existing_team=None,
+            )
 
         login_name = f"{name}_{phone_last4}"
         device_id = get_device_identifier()
@@ -151,10 +157,19 @@ def user_login_page():
 
         if user is None:
             # 首次登入：建立用戶、綁定設備、發放 1 次抽卡
+            if not team or team not in TEAM_CHOICES:
+                error = "請選擇戰隊。"
+                return render_template(
+                    "user_login.html",
+                    error=error,
+                    team_choices=TEAM_CHOICES,
+                    existing_team=None,
+                )
+
             user = User(
                 name=name,
                 login_name=login_name,
-                team=None,
+                team=team,
                 consumed_draws=0,
                 remaining_draws=1,
                 first_login_at=now,
@@ -168,6 +183,7 @@ def user_login_page():
             db.session.commit()
         else:
             # 非首次登入：檢查設備是否已綁定
+            # 如果用戶已有戰隊，忽略表單中的戰隊選擇（不可更改）
             user.last_login_at = now
             db.session.commit()
 
@@ -185,14 +201,26 @@ def user_login_page():
                     db.session.add(pd)
                     db.session.commit()
                 error = "已有同名用戶在其他設備登入，建議聯繫運營人員。"
-                return render_template("user_login.html", error=error)
+                return render_template(
+                    "user_login.html",
+                    error=error,
+                    team_choices=TEAM_CHOICES,
+                    existing_team=user.team,
+                )
 
         # 設定 7 天免登入
         session.permanent = True
         session["user_id"] = user.user_id
         return redirect(url_for("draw_page"))
 
-    return render_template("user_login.html", error=error)
+    # GET 請求：檢查是否有已存在的用戶（通過 URL 參數或 session 判斷）
+    # 這裡簡化處理，直接顯示選擇框
+    return render_template(
+        "user_login.html",
+        error=error,
+        team_choices=TEAM_CHOICES,
+        existing_team=None,
+    )
 
 
 @app.route("/logout")
