@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -258,15 +258,15 @@
         <div class="title-block">
           <div class="title">财神赐福狂欢抽卡</div>
           <div class="subtitle">
-            今日幸運玩家：<span class="user-tag">{{ name }}</span>
+            今日幸运玩家：<span class="user-tag">{{ name }}</span>
           </div>
         </div>
-        <a href="{{ url_for('user_logout') }}" class="logout-link">退出登入</a>
+        <a href="{{ url_for('user_logout') }}" class="logout-link">退出登录</a>
       </div>
 
       <div class="stats">
         <div class="stat-card">
-          <div class="stat-label">剩餘抽卡次數</div>
+          <div class="stat-label">剩余抽卡次数</div>
           <div class="stat-value" id="remainingValue">{{ remaining }}</div>
         </div>
         <div class="stat-card">
@@ -277,7 +277,7 @@
 
       <div class="draw-area">
         <div class="draw-desc">
-          集齊五路财神，即可額外解鎖大礼包。
+          集齐五路财神，即可额外解锁大礼包。
         </div>
 
         <button
@@ -286,15 +286,15 @@
           {% if remaining <= 0 %}disabled{% endif %}
         >
           {% if remaining > 0 %}
-          開始抽卡
+          开始抽卡
           {% else %}
-          抽卡次數用完啦，快去邀人加次數
+          抽卡次数用完啦，快去邀人加次数
           {% endif %}
         </button>
       </div>
 
       <div class="owned-section">
-        已擁有的财神卡：
+        已拥有的财神卡：
         <div class="owned-grid" id="cardsContainer">
           <!-- 初始由 JS 根據 owned_cards 渲染 -->
         </div>
@@ -306,21 +306,21 @@
   <div id="loadingOverlay">
     <div class="loading-box">
       <div class="spinner"></div>
-      <div class="loading-text">抽卡中，請稍候...</div>
+      <div class="loading-text">抽卡中，请稍候...</div>
     </div>
   </div>
 
   <!-- 抽卡結果彈窗（支持多個彈窗排隊顯示） -->
   <div id="resultModal">
     <div class="modal-card">
-      <div id="modalTitle" class="modal-title">抽卡結果</div>
+      <div id="modalTitle" class="modal-title">抽卡结果</div>
       <div class="modal-image-wrapper">
         <img id="cardImage" src="" alt="card" />
       </div>
       <div id="modalText" class="modal-text">
-        恭喜獲得【某某卡】财神卡！
+        恭喜获得【某某卡】财神卡！
       </div>
-      <button id="modalConfirm" class="modal-button">領取</button>
+      <button id="modalConfirm" class="modal-button">领取</button>
     </div>
   </div>
 
@@ -339,12 +339,12 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
 
     const CARD_NAMES = {
-      1: "關羽",
+      1: "关羽",
       2: "比干",
-      3: "趙公明",
-      4: "柴榮",
+      3: "赵公明",
+      4: "柴荣",
       5: "王亥",
-      6: "五路財神"
+      6: "五路财神"
     };
 
     const CARD_IMAGES = {
@@ -356,7 +356,7 @@
       6: "{{ url_for('static', filename='cards/card6.png') }}"
     };
 
-    // 一進抽卡頁就預載全部卡片圖片
+    // 一进抽卡页就预载全部卡片图片
     (function preloadCardImages() {
       Object.values(CARD_IMAGES).forEach((url) => {
         if (!url) return;
@@ -367,7 +367,7 @@
 
     const TOTAL_CARDS = 6;
 
-    // 彈窗隊列：支援依次顯示多個彈窗（例如本次卡片 + 獎勵卡6）
+    // 弹窗队列：支持依次显示多个弹窗（例如本次卡片 + 奖励卡6）
     const modalQueue = [];
 
     function showModalFromQueue() {
@@ -432,22 +432,22 @@
           modalQueue.length = 0;
           if (data.error === "NO_TIMES") {
             drawButton.disabled = true;
-            drawButton.textContent = "抽卡次數用完啦，快去邀人加次數";
+            drawButton.textContent = "抽卡次数用完啦，快去邀人加次数";
             modalQueue.push({
               title: "提示",
-              text: "抽卡次數用完啦，快去邀人加次數！",
+              text: "抽卡次数用完啦，快去邀人加次数！",
               imgUrl: ""
             });
           } else if (data.error === "NOT_LOGIN") {
             modalQueue.push({
               title: "提示",
-              text: "登录失效，請返回重新登入。",
+              text: "登录失效，请返回重新登录。",
               imgUrl: ""
             });
           } else {
             modalQueue.push({
-              title: "錯誤",
-              text: "網路或伺服器發生問題，請稍後再試。",
+              title: "错误",
+              text: "网络或服务器发生问题，请稍后再试。",
               imgUrl: ""
             });
           }
@@ -455,24 +455,24 @@
           return;
         }
 
-        // 更新次數
+        // 更新次数
         remainingEl.textContent = data.remaining;
         consumedEl.textContent = data.consumed;
 
         if (data.remaining <= 0) {
           drawButton.disabled = true;
-          drawButton.textContent = "抽卡次數用完啦，快去邀人加次數";
+          drawButton.textContent = "抽卡次数用完啦，快去邀人加次数";
         } else {
           drawButton.disabled = false;
           drawButton.textContent = "開始抽卡";
         }
 
-        // 更新已擁有卡圖片
+        // 更新已拥有卡图片
         renderOwnedGrid(data.owned_cards || []);
 
         const cardName = CARD_NAMES[data.card_id] || ("卡 " + data.card_id);
         const imgUrl = CARD_IMAGES[data.card_id] || "";
-        let firstText = `恭喜獲得【${cardName}】财神卡！`;
+        let firstText = `恭喜获得【${cardName}】财神卡！`;
 
         // 本次抽到的卡彈窗
         modalQueue.length = 0;
@@ -486,7 +486,7 @@
         if (data.bonus_card6) {
           const card6Name = CARD_NAMES[6];
           const card6Img = CARD_IMAGES[6] || "";
-          const bonusText = `恭喜獲得【${card6Name}】财神卡！<br/><br/>恭喜{{ name }}解鎖五路財神卡，一路發發發！`;
+          const bonusText = `恭喜获得【${card6Name}】财神卡！<br/><br/>恭喜{{ name }}解锁五路财神卡，一路发发发！`;
           modalQueue.push({
             title: "抽卡結果",
             text: bonusText,
@@ -500,8 +500,8 @@
         showLoadingOverlay(false);
         modalQueue.length = 0;
         modalQueue.push({
-          title: "錯誤",
-          text: "網路或伺服器發生問題，請稍後再試。",
+          title: "错误",
+          text: "网络或服务器发生问题，请稍后再试。",
           imgUrl: ""
         });
         showModalFromQueue();
@@ -520,7 +520,7 @@
       modalConfirm.addEventListener("click", showModalFromQueue);
     }
 
-    // 從後端拿到歷史已擁有卡（Jinja 注入），一進頁面就渲染 6 個框
+    // 从后端拿到历史已拥有卡（Jinja 注入），一进页面就渲染 6 个框
     const initialOwned = {{ owned_cards|tojson }};
     renderOwnedGrid(initialOwned);
   </script>

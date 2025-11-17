@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -104,22 +104,22 @@
 <body>
   <div class="app">
     <div class="title">财神赐福狂欢季！红包福利送不停！</div>
-    <div class="subtitle">送你 1 次抽卡機會，填寫真實姓名，马上抽卡！</div>
+    <div class="subtitle">送你 1 次抽卡机会，填写真实姓名，马上抽卡！</div>
 
     <form method="post">
       <div class="field">
-        <div class="label">真實姓名</div>
+        <div class="label">真实姓名</div>
         <input
           class="input"
           type="text"
           name="name"
-          placeholder="請輸入你的真實姓名"
+          placeholder="请输入你的真实姓名"
           required
         />
       </div>
 
       <div class="field">
-        <div class="label">手機號後四位</div>
+        <div class="label">手机号后四位</div>
         <input
           class="input"
           type="text"
@@ -132,7 +132,7 @@
       </div>
 
       <div class="field">
-        <div class="label">選擇戰隊</div>
+        <div class="label">选择战队</div>
         {% if existing_team %}
         <input
           class="input"
@@ -142,30 +142,30 @@
           style="background: #1f2937; color: #9ca3af; cursor: not-allowed;"
         />
         <div class="tip" style="margin-top: 4px; color: #fbbf24;">
-          ⚠️ 戰隊已選擇，不可更改
+          ⚠️ 战队已选择，不可更改
         </div>
         {% else %}
         <select class="input" name="team" required>
-          <option value="">請選擇戰隊</option>
+          <option value="">请选择战队</option>
           {% for team in team_choices %}
           <option value="{{ team }}">{{ team }}</option>
           {% endfor %}
         </select>
         <div class="tip" style="margin-top: 4px; color: #fbbf24;">
-          ⚠️ 選擇後不可更改，請謹慎選擇
+          ⚠️ 选择后不可更改，请谨慎选择
         </div>
         {% endif %}
       </div>
 
-      <button type="submit" class="button">開始抽卡</button>
+      <button type="submit" class="button">开始抽卡</button>
 
       {% if error %}
       <div class="error">{{ error }}</div>
       {% endif %}
 
       <div class="tip">
-        · 僅限公司內部員工參與，請勿填寫他人姓名。<br />
-        · 如無法登入，請聯繫運營人員處理。
+        · 仅限公司内部员工参与，请勿填写他人姓名。<br />
+        · 如无法登录，请联系运营人员处理。
       </div>
     </form>
   </div>
