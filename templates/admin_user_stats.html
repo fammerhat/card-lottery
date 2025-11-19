@@ -146,12 +146,8 @@
 
       <form class="filter-form" method="get" action="{{ url_for('admin_user_stats') }}">
         <label>
-          开始日期
-          <input type="date" name="start_date" value="{{ start_date }}">
-        </label>
-        <label>
-          结束日期
-          <input type="date" name="end_date" value="{{ end_date }}">
+          统计日期（18:00-18:00）
+          <input type="date" name="date" value="{{ target_date }}">
         </label>
         <label style="flex:1; min-width: 160px;">
           用户名关键词
@@ -159,8 +155,17 @@
         </label>
         <button class="btn" type="submit">筛选</button>
       </form>
+      <div style="font-size:12px; color:#9ca3af; margin-bottom:10px;">
+        不选择日期时显示历史累计数据，选择日期则统计“前一日18:00 至 选定当日18:00”的每日数据。
+      </div>
 
       <div class="summary">
+        {% if mode_daily %}
+          时间窗口：{{ window_label }}（统计当天 18:00 截至）
+        {% else %}
+          {{ window_label }}
+        {% endif %}
+        <br />
         当前结果：财神卡 {{ total_cards }} 张，上传 {{ total_uploads }} 次，生成 {{ total_generates }} 次
       </div>
 

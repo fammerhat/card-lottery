@@ -1134,12 +1134,20 @@ def admin_user_stats():
         return need_login
 
     keyword = (request.args.get("keyword") or "").strip()
-    start_date_str = (request.args.get("start_date") or "").strip()
-    end_date_str = (request.args.get("end_date") or "").strip()
+    target_date_str = (request.args.get("date") or "").strip()
 
-    start_dt = parse_date_input(start_date_str)
-    end_dt = parse_date_input(end_date_str)
-    end_dt_exclusive = end_dt + timedelta(days=1) if end_dt else None
+    target_dt = parse_date_input(target_date_str)
+    mode_daily = bool(target_dt)
+    if mode_daily:
+        base_date = target_dt.date()
+        day_end = datetime.combine(base_date, time(18, 0))
+        day_start = day_end - timedelta(days=1)
+        window_label = f"{day_start.strftime('%Y-%m-%d %H:%M')} 至 {day_end.strftime('%Y-%m-%d %H:%M')}"
+    else:
+        day_start = None
+        day_end = None
+        target_date_str = ""
+        window_label = "累计数据（含历史全部记录）"
 
     user_query = User.query
     if keyword:
@@ -1163,12 +1171,10 @@ def admin_user_stats():
             card_first_sub.c.uid, func.count().label("cnt")
         ).filter(card_first_sub.c.uid.in_(user_ids))
 
-        if start_dt:
-            card_query = card_query.filter(card_first_sub.c.first_obtained >= start_dt)
-        if end_dt_exclusive:
-            card_query = card_query.filter(
-                card_first_sub.c.first_obtained < end_dt_exclusive
-            )
+        if day_start:
+            card_query = card_query.filter(card_first_sub.c.first_obtained >= day_start)
+        if day_end:
+            card_query = card_query.filter(card_first_sub.c.first_obtained < day_end)
 
         for uid, cnt in card_query.all():
             card_counts[uid] = cnt
@@ -1192,10 +1198,10 @@ def admin_user_stats():
             .filter(GenerateRecord.user_name.isnot(None))
             .filter(GenerateRecord.user_name != "")
         )
-        if start_dt:
-            gr_query = gr_query.filter(GenerateRecord.created_at >= start_dt)
-        if end_dt_exclusive:
-            gr_query = gr_query.filter(GenerateRecord.created_at < end_dt_exclusive)
+        if day_start:
+            gr_query = gr_query.filter(GenerateRecord.created_at >= day_start)
+        if day_end:
+            gr_query = gr_query.filter(GenerateRecord.created_at < day_end)
 
         for row in gr_query.group_by(func.lower(GenerateRecord.user_name)).all():
             generate_stats[row.uname] = {
@@ -1231,8 +1237,9 @@ def admin_user_stats():
         total_uploads=total_uploads,
         total_generates=total_generates,
         keyword=keyword,
-        start_date=start_date_str,
-        end_date=end_date_str,
+        target_date=target_date_str,
+        mode_daily=mode_daily,
+        window_label=window_label,
     )
 
 
