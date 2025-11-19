@@ -451,6 +451,26 @@ def generate_volcengine_signature(
         f"SignedHeaders={signed_headers}, Signature={signature}"
     )
 
+    # 详细调试日志
+    print("=" * 60)
+    print("[签名调试信息]")
+    print(f"Method: {method}")
+    print(f"Path: {repr(path)}")
+    print(f"Query: {repr(query)}")
+    print(f"Host: {host_lower}")
+    print(f"X-Date: {x_date}")
+    print(f"Payload Hash: {payload_hash}")
+    print(f"Canonical Headers:\n{repr(canonical_headers)}")
+    print(f"Signed Headers: {signed_headers}")
+    print(f"Canonical Request:\n{repr(canonical_request)}")
+    print(f"Hashed Canonical Request: {hashed_canonical_request}")
+    print(f"Date Stamp: {date_stamp}")
+    print(f"Scope: {scope}")
+    print(f"String to Sign:\n{repr(string_to_sign)}")
+    print(f"Signature: {signature}")
+    print(f"Authorization: {authorization}")
+    print("=" * 60)
+
     return authorization, x_date, payload_hash
 
 
