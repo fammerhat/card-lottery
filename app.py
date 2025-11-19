@@ -9,7 +9,7 @@ import requests
 import hmac
 import hashlib
 import json
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from flask import (
     Flask,
@@ -64,6 +64,8 @@ JIMENG_ACCESS_KEY = os.getenv("JIMENG_ACCESS_KEY", "")  # AK - 从环境变量�
 JIMENG_SECRET_KEY = os.getenv("JIMENG_SECRET_KEY", "")  # SK - 从环境变量读取
 JIMENG_SERVICE = os.getenv("JIMENG_SERVICE", "cv")  # 服务名
 JIMENG_REGION = os.getenv("JIMENG_REGION", "cn-north-1")  # 区域
+JIMENG_ACTION = os.getenv("JIMENG_ACTION", "GenerateImage")
+JIMENG_VERSION = os.getenv("JIMENG_VERSION")
 JIMENG_ALLOW_FALLBACK = os.getenv("JIMENG_ALLOW_FALLBACK", "false").lower() == "true"
 
 
@@ -407,7 +409,7 @@ def call_jimeng_api(original_abs_path, prompt):
         
         payload_json = json.dumps(payload_dict, ensure_ascii=False)
         
-        # 解析API URL
+        # 解析API URL與查詢參數
         from urllib.parse import urlparse
         parsed_url = urlparse(JIMENG_API_URL)
         host = parsed_url.netloc
@@ -415,7 +417,14 @@ def call_jimeng_api(original_abs_path, prompt):
         if not path.endswith("/"):
             path += "/"
         path += "cv/v1/image_generation"  # 根據實際API文檔調整路徑
-        
+
+        query_items = []
+        if JIMENG_ACTION:
+            query_items.append(("Action", JIMENG_ACTION))
+        if JIMENG_VERSION:
+            query_items.append(("Version", JIMENG_VERSION))
+        query_string = urlencode(sorted(query_items)) if query_items else ""
+
         # 構建請求頭
         headers = {
             "Content-Type": "application/json",
@@ -430,7 +439,7 @@ def call_jimeng_api(original_abs_path, prompt):
             JIMENG_REGION,
             host,
             path,
-            "",  # query string
+            query_string,
             headers,
             payload_json
         )
@@ -443,7 +452,10 @@ def call_jimeng_api(original_abs_path, prompt):
         })
 
         # 發送POST請求
-        full_url = f"{JIMENG_API_URL}{path}"
+        if query_string:
+            full_url = f"{JIMENG_API_URL}{path}?{query_string}"
+        else:
+            full_url = f"{JIMENG_API_URL}{path}"
         response = requests.post(
             full_url,
             headers=headers,
