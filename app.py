@@ -408,11 +408,16 @@ def generate_volcengine_signature(
     canonical_headers_map["x-content-sha256"] = headers.get("X-Content-Sha256", payload_hash)
     canonical_headers_map["x-date"] = x_date
     
+    # Content-Type 也需要参与签名（如果存在）
+    content_type = headers.get("Content-Type", "").strip()
+    if content_type:
+        canonical_headers_map["content-type"] = content_type
+    
     # 处理其他需要签名的header（如果有）
     for key, value in headers.items():
         lower_key = key.strip().lower()
         if lower_key not in ("host", "x-content-sha256", "x-date", "content-type"):
-            # 只添加需要签名的header，Content-Type通常不参与签名
+            # 只添加需要签名的header
             canonical_headers_map[lower_key] = value.strip()
 
     # 按key排序
