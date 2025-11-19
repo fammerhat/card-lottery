@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>管理員登入</title>
+  <title>管理员登录</title>
   <style>
     body {
       margin: 0;
@@ -85,12 +85,12 @@
 </head>
 <body>
   <div class="box">
-    <div class="title">管理員後台</div>
-    <div class="subtitle">請輸入帳號與密碼</div>
+    <div class="title">管理员后台</div>
+    <div class="subtitle">请输入账号与密码</div>
 
     <form method="post">
       <div class="field">
-        <div class="label">帳號</div>
+        <div class="label">账号</div>
         <input
           class="input"
           type="text"
@@ -100,7 +100,7 @@
         />
       </div>
       <div class="field">
-        <div class="label">密碼</div>
+        <div class="label">密码</div>
         <input
           class="input"
           type="password"
@@ -109,7 +109,7 @@
           required
         />
       </div>
-      <button type="submit" class="button">登入</button>
+      <button type="submit" class="button">登录</button>
 
       {% if error %}
       <div class="error">{{ error }}</div>

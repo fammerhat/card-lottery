@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理员后台 - 生成结果审核</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 220px;
+      background: #0f172a;
+      padding: 18px 16px;
+      border-right: 1px solid #1f2937;
+      box-sizing: border-box;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .admin-name {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+    .nav-link {
+      display: block;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: #e5e7eb;
+      text-decoration: none;
+      margin-bottom: 4px;
+    }
+    .nav-link.active {
+      background: #1d4ed8;
+    }
+    .nav-link:hover {
+      background: #111827;
+    }
+    .main {
+      flex: 1;
+      padding: 16px 18px 24px;
+      box-sizing: border-box;
+    }
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid #1f2937;
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: #9ca3af;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 1px solid #1f2937;
+    }
+    .btn {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: #e5e7eb;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn.approve {
+      background: #16a34a;
+      border-color: #16a34a;
+    }
+    .btn.reject {
+      background: #b91c1c;
+      border-color: #b91c1c;
+    }
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 13px;
+    }
+    select {
+      background: #020617;
+      color: #e5e7eb;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      padding: 4px 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="logo">抽卡后台</div>
+      <div class="admin-name">管理员：{{ admin_name }}</div>
+      <a href="{{ url_for('admin_users') }}" class="nav-link">用户列表</a>
+      <a href="{{ url_for('admin_devices') }}" class="nav-link">设备绑定审核</a>
+      <a href="{{ url_for('admin_generates') }}" class="nav-link active">生成结果审核</a>
+      <div style="margin-top: 20px;">
+        <a href="{{ url_for('admin_logout') }}" class="nav-link">登出</a>
+      </div>
+    </div>
+    <div class="main">
+      <div class="page-title">生成结果审核</div>
+
+      <form class="filter-bar" method="get" action="{{ url_for('admin_generates') }}">
+        <label>
+          状态：
+          <select name="status" onchange="this.form.submit()">
+            <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>待审核</option>
+            <option value="approved" {% if current_status == 'approved' %}selected{% endif %}>已通过</option>
+            <option value="rejected" {% if current_status == 'rejected' %}selected{% endif %}>已拒绝</option>
+            <option value="all" {% if current_status == 'all' %}selected{% endif %}>全部</option>
+          </select>
+        </label>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>使用者</th>
+            <th>口令</th>
+            <th>缩略图</th>
+            <th>原图</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+          <tr>
+            <td>{{ record.id }}</td>
+            <td>{{ record.user_name or '匿名用户' }}</td>
+            <td style="max-width:220px; white-space:pre-wrap;">{{ record.prompt }}</td>
+            <td>
+              <img src="{{ record.thumbnail_url }}" alt="thumb" class="thumb" />
+            </td>
+            <td>
+              {% if record.dream_image_url %}
+              <a class="btn" href="{{ record.dream_image_url }}" target="_blank">下载</a>
+              {% else %}
+              -
+              {% endif %}
+            </td>
+            <td>{{ record.status }}</td>
+            <td>
+              {% if record.status != 'approved' %}
+              <form class="inline" method="post" action="{{ url_for('admin_approve_generate', record_id=record.id, status=current_status) }}">
+                <button class="btn approve" type="submit">通过</button>
+              </form>
+              {% endif %}
+              {% if record.status != 'rejected' %}
+              <form class="inline" method="post" action="{{ url_for('admin_reject_generate', record_id=record.id, status=current_status) }}" style="margin-top:4px;">
+                <button class="btn reject" type="submit">拒绝</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
+

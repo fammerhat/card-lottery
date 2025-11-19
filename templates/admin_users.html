@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>管理員後台 - 用戶列表</title>
+  <title>管理员后台 - 用户列表</title>
   <style>
     body {
       margin: 0;
@@ -145,11 +145,12 @@
 <body>
   <div class="layout">
     <div class="sidebar">
-      <div class="logo">抽卡後台</div>
-      <div class="admin-name">管理員：{{ admin_name }}</div>
+      <div class="logo">抽卡后台</div>
+      <div class="admin-name">管理员：{{ admin_name }}</div>
 
-      <a href="{{ url_for('admin_users') }}" class="nav-link active">用戶列表</a>
-      <a href="{{ url_for('admin_devices') }}" class="nav-link">設備綁定審核</a>
+      <a href="{{ url_for('admin_users') }}" class="nav-link active">用户列表</a>
+      <a href="{{ url_for('admin_devices') }}" class="nav-link">设备绑定审核</a>
+      <a href="{{ url_for('admin_generates') }}" class="nav-link">生成结果审核</a>
 
       <div class="logout">
         <a href="{{ url_for('admin_logout') }}" class="nav-link">登出</a>
@@ -157,11 +158,11 @@
     </div>
 
     <div class="main">
-      <div class="page-title">用戶列表</div>
+      <div class="page-title">用户列表</div>
 
       <form class="toolbar" method="get" action="{{ url_for('admin_users') }}">
         <label style="font-size:13px;">
-          戰隊：
+          战队：
           <select name="team" onchange="this.form.submit()">
             <option value="">全部</option>
             {% for t in team_choices %}
@@ -176,7 +177,7 @@
           class="btn"
           href="{{ url_for('admin_export', team=team_filter) }}"
         >
-          導出 CSV
+          导出 CSV
         </a>
       </form>
 
@@ -184,17 +185,17 @@
         <thead>
           <tr>
             <th>ID</th>
-            <th>姓名 / 登入名</th>
-            <th>戰隊</th>
-            <th>已獲得卡片</th>
+            <th>姓名 / 登录名</th>
+            <th>战队</th>
+            <th>已获得卡片</th>
             <th>已消耗</th>
-            <th>剩餘</th>
-            <th>調整剩餘</th>
+            <th>剩余</th>
+            <th>调整剩余</th>
             <th>增加抽卡</th>
-            <th>設備ID</th>
-            <th>首次登入</th>
-            <th>最後登入</th>
-            <th>刪除</th>
+            <th>设备ID</th>
+            <th>首次登录</th>
+            <th>最后登录</th>
+            <th>删除</th>
           </tr>
         </thead>
         <tbody>
@@ -202,7 +203,7 @@
           <tr>
             <td class="mono">{{ u.user_id }}</td>
             <td>
-              <!-- 編輯姓名 -->
+              <!-- 编辑姓名 -->
               <form
                 class="inline"
                 method="post"
@@ -219,7 +220,7 @@
                 </div>
             </td>
             <td>
-                <!-- 選擇戰隊 -->
+                <!-- 选择战队 -->
                 <select name="team" class="input-small">
                   <option value=""></option>
                   {% for t in team_choices %}
@@ -233,7 +234,7 @@
             <td class="mono">{{ u.consumed }}</td>
             <td class="mono">{{ u.remaining }}</td>
             <td>
-                <!-- 覆蓋剩餘抽卡次數 -->
+                <!-- 覆盖剩余抽卡次数 -->
                 <input
                   class="input-small"
                   type="number"
@@ -249,7 +250,7 @@
               </form>
             </td>
             <td>
-              <!-- 增加抽卡次數（累加） -->
+              <!-- 增加抽卡次数（累加） -->
               <form
                 class="inline"
                 method="post"
@@ -265,7 +266,7 @@
                   style="width:60px;"
                 />
                 <button class="btn small" type="submit">
-                  +次數
+                  +次数
                 </button>
               </form>
             </td>
@@ -283,10 +284,10 @@
                 class="inline"
                 method="post"
                 action="{{ url_for('admin_delete_user', user_id=u.user_id, team=team_filter) }}"
-                onsubmit="return confirm('確認刪除用戶 {{ u.name }} 嗎？此操作無法恢復。');"
+                onsubmit="return confirm('确认删除用户 {{ u.name }} 吗？此操作无法恢复。');"
               >
                 <button class="btn small" type="submit" style="border-color:#b91c1c; background:#b91c1c;">
-                  刪除
+                  删除
                 </button>
               </form>
             </td>

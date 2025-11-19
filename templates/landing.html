@@ -15,11 +15,10 @@
       min-height: 100vh;
       background: linear-gradient(180deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
       color: #fff;
-      padding: 16px;
+      padding: 16px 12px 32px;
       position: relative;
       overflow-x: hidden;
     }
-    /* 背景装饰元素 */
     body::before {
       content: "";
       position: fixed;
@@ -34,47 +33,46 @@
     .app {
       position: relative;
       z-index: 1;
-      max-width: 420px;
+      max-width: 440px;
       margin: 0 auto;
     }
     .header {
       text-align: center;
-      margin-bottom: 20px;
-      padding-top: 8px;
+      margin-bottom: 14px;
+      padding-top: 4px;
     }
     .title {
-      font-size: 24px;
+      font-size: 22px;
       font-weight: 900;
       margin-bottom: 6px;
-      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-      letter-spacing: 0.05em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.35);
+      letter-spacing: 0.04em;
     }
     .subtitle {
-      font-size: 14px;
-      font-weight: 600;
+      font-size: 13px;
       color: #cbd5e1;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
       line-height: 1.4;
     }
     .guide-section {
-      background: rgba(30, 41, 59, 0.85);
-      border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 20px;
-      padding: 16px 14px 18px;
-      margin-bottom: 18px;
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 18px;
+      padding: 14px 12px 16px;
+      margin-bottom: 12px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
     .guide-title {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       color: #fbbf24;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       text-align: center;
+      letter-spacing: 0.05em;
     }
     .step {
       display: flex;
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 8px;
+      margin-bottom: 10px;
       align-items: flex-start;
     }
     .step:last-child {
@@ -82,22 +80,22 @@
     }
     .step-number {
       flex-shrink: 0;
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       border-radius: 999px;
-      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      background: linear-gradient(135deg, #fbbf24, #f97316);
       color: #0f172a;
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
+      box-shadow: 0 2px 6px rgba(251, 191, 36, 0.35);
     }
     .step-content {
       flex: 1;
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.45;
       color: #e2e8f0;
     }
     .step-content strong {
@@ -109,51 +107,274 @@
       font-weight: 800;
       text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
     }
-    .links-section {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .link-block {
-      background: rgba(30, 41, 59, 0.85);
+    .actions-wrapper {
+      background: rgba(15, 23, 42, 0.9);
       border: 1px solid rgba(148, 163, 184, 0.2);
-      border-radius: 16px;
+      border-radius: 18px;
       padding: 12px;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
     }
-    .links-section .btn {
+    .actions-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .btn {
       width: 100%;
-      padding: 14px;
-      border-radius: 999px;
+      padding: 12px 6px;
+      border-radius: 14px;
       border: none;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: 700;
-      color: #fff;
+      color: #0f172a;
       text-decoration: none;
       text-align: center;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 6px;
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
       transition: transform 0.15s, box-shadow 0.15s;
+      cursor: pointer;
+      min-height: 48px;
     }
-    .links-section .btn:active {
+    .btn:active {
       transform: translateY(1px);
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
     }
     .btn-primary {
       background: linear-gradient(135deg, #facc15, #fb923c);
-      color: #1f2937;
     }
     .btn-secondary {
-      background: linear-gradient(135deg, #dc2626, #b91c1c);
+      background: linear-gradient(135deg, #f97316, #ef4444);
+      color: #fff;
     }
     .btn-tertiary {
-      background: linear-gradient(135deg, #16a34a, #15803d);
+      background: linear-gradient(135deg, #1d4ed8, #4f46e5);
+      color: #fff;
     }
     .emoji {
+      font-size: 16px;
+    }
+    .gallery-section {
+      margin-top: 6px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gallery-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #cbd5e1;
+    }
+    .gallery-track {
+      height: 140px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      overflow: hidden;
+      position: relative;
+    }
+    .gallery-track img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      border-radius: 14px;
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+    }
+    .gallery-track img.active {
+      opacity: 1;
+    }
+    .tip {
+      font-size: 11px;
+      color: #cbd5e1;
+      text-align: center;
+      margin-top: 12px;
+    }
+    .dialog-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 16px;
+    }
+    .dialog {
+      width: 100%;
+      max-width: 420px;
+      background: #0f172a;
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      display: flex;
+      flex-direction: column;
+      max-height: 90vh;
+    }
+    .dialog-header {
+      padding: 14px 16px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .dialog-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .dialog-close {
+      background: none;
+      border: none;
+      color: #cbd5e1;
       font-size: 18px;
+      cursor: pointer;
+    }
+    .dialog-body {
+      padding: 10px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: hidden;
+      position: relative;
+      order: 2;
+    }
+    .dialog-recommend {
+      padding: 8px 16px 4px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.95);
+      flex-shrink: 0;
+      order: 3;
+      position: relative;
+      z-index: 5;
+    }
+    .recommend-btn {
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(15, 23, 42, 0.8);
+      color: #fbbf24;
+      font-size: 12px;
+      cursor: pointer;
+      width: 33%;
+      text-align: center;
+      margin: 0 auto;
+    }
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .chat-message {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 12px;
+      padding: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .chat-message.user {
+      align-self: flex-end;
+      background: rgba(59, 130, 246, 0.12);
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+    .chat-message .msg-label {
+      font-weight: 700;
+      font-size: 11px;
+      color: #fbbf24;
+    }
+    .chat-message img {
+      width: 100%;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+    .chat-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .chat-actions .btn {
+      padding: 6px 10px;
+      min-height: auto;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+    .dialog-input {
+      padding: 10px 16px 14px;
+      border-top: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      order: 4;
+      flex-shrink: 0;
+    }
+    .upload-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 1px dashed rgba(148, 163, 184, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #cbd5e1;
+    }
+    .dialog-input textarea {
+      flex: 1;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(2, 6, 23, 0.8);
+      color: #fff;
+      padding: 10px 12px;
+      font-size: 12px;
+      outline: none;
+      resize: none;
+      min-height: 40px;
+      max-height: 120px;
+      overflow-y: auto;
+      font-family: inherit;
+      line-height: 1.5;
+    }
+    .dialog-input button.send {
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: none;
+      font-weight: 700;
+      background: linear-gradient(135deg, #facc15, #fb923c);
+      color: #0f172a;
+      cursor: pointer;
+    }
+    .dialog-input button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .upload-preview {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background-size: cover;
+      background-position: center;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+    @media (max-width: 380px) {
+      .actions-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .btn {
+        font-size: 12px;
+      }
     }
   </style>
 </head>
@@ -166,28 +387,24 @@
 
     <div class="guide-section">
       <div class="guide-title">活动速通指南</div>
-
       <div class="step">
         <div class="step-number">①</div>
         <div class="step-content">
           <strong>入群即赚：</strong>点击「财神卡抽取」，解锁初始财神卡，再点击「上传财神」按要求传图，领<span class="money">3元</span>红包。
         </div>
       </div>
-
       <div class="step">
         <div class="step-number">②</div>
         <div class="step-content">
           <strong>邀友共赢：</strong>邀请公司内部员工入群，点击「邀请好友登记」，若好友完成传图，你得财神卡，每获一张不同的财神卡并上传对应财神生成图，可兑 <span class="money">3 元</span>红包（好友已入其他战队无效）。
         </div>
       </div>
-
       <div class="step">
         <div class="step-number">③</div>
         <div class="step-content">
           <strong>集卡加码：</strong>攒 5 张不同财神卡并生成财神图，直接解锁 <span class="money">50 元</span>大额红包。
         </div>
       </div>
-
       <div class="step">
         <div class="step-number">④</div>
         <div class="step-content">
@@ -196,29 +413,391 @@
       </div>
     </div>
 
-    <div class="links-section">
-      <div class="link-block">
+    <div class="actions-wrapper">
+      <div class="actions-row">
         <a href="https://card-lottery.onrender.com/login" class="btn btn-primary">
-          <span class="emoji">🧧</span> 财神卡抽取链接
+          财神卡抽取
         </a>
-      </div>
-
-      <div class="link-block">
-        <a href="https://yuyue.wjx.com/vm/rNKL6T7.aspx#" target="_blank" class="btn btn-secondary">
-          <span class="emoji">📸</span> 上传财神图片
-        </a>
-      </div>
-
-      <div class="link-block">
+        <button class="btn btn-secondary" id="openGenerator">
+          生成财神手办
+        </button>
         <a href="https://v.wjx.cn/vm/OPVi0CD.aspx#" target="_blank" class="btn btn-tertiary">
-          <span class="emoji">🤝</span> 邀请好友登记
+          邀请好友登记
         </a>
       </div>
+      <div class="gallery-section" id="gallerySection">
+        <div class="gallery-header">
+          <span>玩家生成展示</span>
+          <span style="font-size:11px;">3 秒自动轮播</span>
+        </div>
+        <div class="gallery-track" id="galleryTrack"></div>
+      </div>
+    </div>
 
-      <div class="tip" style="text-align:center; color:#cbd5e1; margin-top:4px;">
-        tips：每日审核1-2次，统一下发红包和财神卡次数
+    <div class="tip">tips：每日审核1-2次，统一下发红包和财神卡次数</div>
+  </div>
+
+  <div class="dialog-overlay" id="generatorDialog">
+    <div class="dialog">
+      <div class="dialog-header">
+        <div class="dialog-title">生成财神手办</div>
+        <button class="dialog-close" id="dialogClose">×</button>
+      </div>
+      <div class="dialog-body">
+        <div class="chat-area" id="chatMessages"></div>
+      </div>
+      <div class="dialog-recommend">
+        <button class="recommend-btn" id="usePrompt">使用推荐口令</button>
+      </div>
+      <div class="dialog-input">
+        <label class="upload-btn" id="uploadTrigger">🖼️</label>
+        <div class="upload-preview" id="uploadPreview" style="display:none;"></div>
+        <input type="file" accept="image/*" id="uploadInput" hidden />
+        <textarea id="promptInput" placeholder="输入你的口令或使用推荐口令" rows="1"></textarea>
+        <button class="send" id="sendBtn">生成</button>
       </div>
     </div>
   </div>
+
+  <script>
+    const initialGallery = [
+      {% for item in approved_images %}
+      {
+        "id": {{ item.id }},
+        "thumbnail_url": {{ item.thumbnail_url|tojson }},
+        "dream_image_url": {{ (item.dream_image_url or "")|tojson }},
+        "user_name": {{ (item.user_name or "匿名用户")|tojson }}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+    const openGeneratorBtn = document.getElementById("openGenerator");
+    const dialogOverlay = document.getElementById("generatorDialog");
+    const dialogClose = document.getElementById("dialogClose");
+    const usePromptBtn = document.getElementById("usePrompt");
+    const uploadInput = document.getElementById("uploadInput");
+    const uploadTrigger = document.getElementById("uploadTrigger");
+    const uploadPreview = document.getElementById("uploadPreview");
+    const promptInput = document.getElementById("promptInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const chatMessages = document.getElementById("chatMessages");
+    const gallerySection = document.getElementById("gallerySection");
+    const galleryTrack = document.getElementById("galleryTrack");
+
+    const RECOMMENDED_PROMPT = "帮我生成图片：用这张图片的脸生成一张Q版财神手办，材质为：黏土或羊毛毡或毛线，随机。财神穿汉服，戴帽子，可以有胡子，形象可以参考五路财神（比干、柴荣、关羽、赵公明、王亥，随机）。整体是喜庆风格，暖色调，背景有一些新年元素。有立体感，有光泽度，手办为全身完整，且有底座，手办的脸部特征要和原图的脸部高度相似，性别相同。一张正方形比例图片。";
+
+    let selectedFile = null;
+    let galleryImages = [];
+    let galleryIndex = 0;
+    let galleryTimer = null;
+
+    function openDialog() {
+      dialogOverlay.style.display = "flex";
+      document.body.style.overflow = "hidden";
+      ensureChatPlaceholder();
+      validateSendButton();
+    }
+    function closeDialog() {
+      dialogOverlay.style.display = "none";
+      document.body.style.overflow = "";
+    }
+    openGeneratorBtn.addEventListener("click", openDialog);
+    dialogClose.addEventListener("click", closeDialog);
+    dialogOverlay.addEventListener("click", (e) => {
+      if (e.target === dialogOverlay) closeDialog();
+    });
+
+    function autoResizeTextarea() {
+      promptInput.style.height = "auto";
+      promptInput.style.height = Math.min(promptInput.scrollHeight, 120) + "px";
+    }
+
+    usePromptBtn.addEventListener("click", () => {
+      promptInput.value = RECOMMENDED_PROMPT;
+      autoResizeTextarea();
+      validateSendButton();
+    });
+
+    uploadTrigger.addEventListener("click", () => uploadInput.click());
+    uploadInput.addEventListener("change", () => {
+      if (uploadInput.files && uploadInput.files[0]) {
+        selectedFile = uploadInput.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          uploadPreview.style.display = "block";
+          uploadPreview.style.backgroundImage = `url(${e.target.result})`;
+        };
+        reader.readAsDataURL(selectedFile);
+      }
+      validateSendButton();
+    });
+
+    function validateSendButton() {
+      // 按钮始终可用，点击时会在 sendGenerate 中检查并显示提示
+      // 这里可以添加视觉反馈，比如改变按钮样式
+      const hasImage = !!selectedFile;
+      const hasPrompt = !!promptInput.value.trim();
+      
+      if (hasImage && hasPrompt) {
+        sendBtn.style.opacity = "1";
+        sendBtn.style.cursor = "pointer";
+      } else {
+        sendBtn.style.opacity = "0.6";
+        sendBtn.style.cursor = "pointer";
+      }
+    }
+    promptInput.addEventListener("input", () => {
+      autoResizeTextarea();
+      validateSendButton();
+    });
+
+    function appendMessage({ type, label, text, imageUrl, actions }) {
+      const msg = document.createElement("div");
+      msg.className = `chat-message ${type}`;
+      if (label) {
+        const lbl = document.createElement("div");
+        lbl.className = "msg-label";
+        lbl.textContent = label;
+        msg.appendChild(lbl);
+      }
+      if (text) {
+        const p = document.createElement("div");
+        p.textContent = text;
+        msg.appendChild(p);
+      }
+      if (imageUrl) {
+        const img = document.createElement("img");
+        img.src = imageUrl;
+        msg.appendChild(img);
+      }
+      if (actions && actions.length) {
+        const actionWrap = document.createElement("div");
+        actionWrap.className = "chat-actions";
+        actions.forEach((act) => {
+          const btn = document.createElement("button");
+          btn.className = "btn";
+          btn.textContent = act.label;
+          btn.addEventListener("click", act.onClick);
+          actionWrap.appendChild(btn);
+        });
+        msg.appendChild(actionWrap);
+      }
+      chatMessages.appendChild(msg);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+      return msg;
+    }
+
+    function startProgress(messageEl) {
+      const steps = [
+        { value: 30, delay: 500 },
+        { value: 60, delay: 800 },
+        { value: 85, delay: 700 },
+        { value: 95, delay: 500 },
+      ];
+      let timer = null;
+      let index = 0;
+
+      function run() {
+        if (index >= steps.length) return;
+        const step = steps[index];
+        messageEl.textContent = `生成中… ${step.value}%`;
+        index += 1;
+        timer = setTimeout(run, step.delay);
+      }
+      run();
+
+      return {
+        finish(success = true) {
+          if (timer) clearTimeout(timer);
+          messageEl.textContent = success ? "生成完成！" : "生成失败，请稍后重试。";
+        },
+      };
+    }
+
+    function ensureChatPlaceholder() {
+      if (!chatMessages.querySelector(".placeholder")) {
+        const placeholder = document.createElement("div");
+        placeholder.className = "chat-message placeholder";
+        placeholder.textContent = "上传你的图片，开始生成你的财神形象吧";
+        chatMessages.appendChild(placeholder);
+      }
+    }
+
+    function clearPlaceholder() {
+      const placeholder = chatMessages.querySelector(".placeholder");
+      if (placeholder) placeholder.remove();
+    }
+
+    ensureChatPlaceholder();
+    validateSendButton(); // 初始化按钮状态
+
+    async function sendGenerate(isRetry = false) {
+      // 检查是否同时有图片和文字口令
+      const hasImage = !!selectedFile;
+      const hasPrompt = !!promptInput.value.trim();
+      
+      if (!hasImage && !hasPrompt) {
+        appendMessage({
+          type: "system",
+          label: "提示",
+          text: "上传参考图才能生成哦",
+        });
+        return;
+      }
+      
+      if (!hasImage) {
+        appendMessage({
+          type: "system",
+          label: "提示",
+          text: "上传参考图才能生成哦",
+        });
+        return;
+      }
+      
+      if (!hasPrompt) {
+        appendMessage({
+          type: "system",
+          label: "提示",
+          text: "输入口令提示词才能生成哦",
+        });
+        return;
+      }
+      
+      // 开始生成时暂时禁用按钮，防止重复点击
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = "0.6";
+      sendBtn.style.cursor = "not-allowed";
+
+      clearPlaceholder();
+
+      let previewUrl = uploadPreview.style.backgroundImage || "";
+      if (previewUrl.startsWith("url(")) {
+        previewUrl = previewUrl.replace(/^url\(["']?/, "").replace(/["']?\)$/, "");
+      } else {
+        previewUrl = "";
+      }
+
+      appendMessage({
+        type: "user",
+        label: isRetry ? "重新生成" : "我的口令",
+        text: promptInput.value.trim(),
+        imageUrl: previewUrl || null,
+      });
+
+      const statusMsg = appendMessage({
+        type: "system",
+        label: "系统",
+        text: "生成中… 0%",
+      });
+      const progress = startProgress(statusMsg);
+
+      const formData = new FormData();
+      formData.append("prompt", promptInput.value.trim());
+      formData.append("image", selectedFile);
+
+      try {
+        const resp = await fetch("/api/generate-figure", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) {
+          progress.finish(false);
+          appendMessage({
+            type: "system",
+            label: "提示",
+            text: data.message || "生成失败，请稍后再试。",
+          });
+        } else {
+          progress.finish(true);
+          const resultMsg = appendMessage({
+            type: "ai",
+            label: "财神助手",
+            text: "这是你的财神手办，点击下方下载按钮，去群里分享吧！",
+            imageUrl: data.thumbnail_url,
+            actions: [
+              {
+                label: "下载图片",
+                onClick: () => {
+                  const link = document.createElement("a");
+                  link.href = data.dream_image_url;
+                  link.target = "_blank";
+                  link.click();
+                },
+              },
+              {
+                label: "重新生成",
+                onClick: () => sendGenerate(true),
+              },
+            ],
+          });
+          // 清空输入和图片
+          promptInput.value = "";
+          selectedFile = null;
+          uploadPreview.style.display = "none";
+          uploadInput.value = "";
+          autoResizeTextarea();
+          validateSendButton();
+          // 滚动到生成结果
+          setTimeout(() => {
+            resultMsg.scrollIntoView({ behavior: "smooth", block: "end" });
+          }, 100);
+        }
+      } catch (error) {
+        console.error(error);
+        progress.finish(false);
+        appendMessage({
+          type: "system",
+          label: "提示",
+          text: "网络异常，请稍后重试。",
+        });
+      } finally {
+        validateSendButton(); // 恢复按钮状态
+      }
+    }
+
+    sendBtn.addEventListener("click", () => sendGenerate(false));
+
+    function renderGallery(images) {
+      galleryTrack.innerHTML = "";
+      if (!images.length) {
+        gallerySection.style.display = "none";
+        return;
+      }
+      gallerySection.style.display = "flex";
+      images.forEach((img, idx) => {
+        const node = document.createElement("img");
+        node.src = img.thumbnail_url;
+        if (idx === 0) node.classList.add("active");
+        galleryTrack.appendChild(node);
+      });
+      galleryImages = Array.from(galleryTrack.querySelectorAll("img"));
+      galleryIndex = 0;
+      if (galleryTimer) clearInterval(galleryTimer);
+      if (galleryImages.length > 1) {
+        galleryTimer = setInterval(() => {
+          galleryImages[galleryIndex].classList.remove("active");
+          galleryIndex = (galleryIndex + 1) % galleryImages.length;
+          galleryImages[galleryIndex].classList.add("active");
+        }, 3000);
+      }
+    }
+
+    async function loadApprovedImages() {
+      try {
+        const resp = await fetch("/api/approved-generates?limit=6");
+        const data = await resp.json();
+        if (data.success) {
+          renderGallery(data.items || []);
+        }
+      } catch (error) {
+        console.error("load gallery error", error);
+      }
+    }
+
+    if (initialGallery.length) {
+      renderGallery(initialGallery);
+    }
+    loadApprovedImages();
+  </script>
 </body>
 </html>

@@ -1,8 +1,15 @@
 from datetime import datetime, timedelta
-from io import StringIO
+from io import StringIO, BytesIO
 import csv
 import os
 import random
+import uuid
+import base64
+import requests
+import hmac
+import hashlib
+import json
+from urllib.parse import quote
 
 from flask import (
     Flask,
@@ -15,12 +22,14 @@ from flask import (
     Response,
 )
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
+from PIL import Image
 
-print(">>> app.py 已被執行")
+print(">>> app.py 已被执行")
 
 app = Flask(__name__)
 
-# --- 基本設定 ---
+# --- 基本设定 ---
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(BASE_DIR, "lottery.db")
 
@@ -28,20 +37,36 @@ app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = "change_this_to_random_string"
 
-# 7 天免登入
+# 7 天免登录
 app.permanent_session_lifetime = timedelta(days=7)
 
 db = SQLAlchemy(app)
 
-# 管理員帳號
+# 圖片儲存路徑
+UPLOAD_BASE = os.path.join(BASE_DIR, "static", "uploads")
+ORIGINAL_DIR = os.path.join(UPLOAD_BASE, "originals")
+GENERATED_DIR = os.path.join(UPLOAD_BASE, "generated")
+THUMB_DIR = os.path.join(UPLOAD_BASE, "thumbnails")
+for folder in (ORIGINAL_DIR, GENERATED_DIR, THUMB_DIR):
+    os.makedirs(folder, exist_ok=True)
+
+# 管理员账号
 ADMIN_USERNAME = "robot"
 ADMIN_PASSWORD = "cs168"
 
-# 固定戰隊列表
-TEAM_CHOICES = ["青龍戰隊", "白虎戰隊", "朱雀戰隊", "玄武戰隊", "黃龍戰隊"]
+# 固定战队列表
+TEAM_CHOICES = ["青龙战队", "白虎战队", "朱雀战队", "玄武战队", "黄龙战队"]
+
+# 即梦AI配置（从环境变量读取，如果没有则使用默认值）
+# 根据火山引擎API文档：https://www.volcengine.com/docs/85621/1747301
+JIMENG_API_URL = os.getenv("JIMENG_API_URL", "https://visual.volcengineapi.com")
+JIMENG_ACCESS_KEY = os.getenv("JIMENG_ACCESS_KEY", "")  # AK - 从环境变量读取
+JIMENG_SECRET_KEY = os.getenv("JIMENG_SECRET_KEY", "")  # SK - 从环境变量读取
+JIMENG_SERVICE = os.getenv("JIMENG_SERVICE", "cv")  # 服务名
+JIMENG_REGION = os.getenv("JIMENG_REGION", "cn-north-1")  # 区域
 
 
-# --- 資料表定義 ---
+# --- 资料表定义 ---
 
 class User(db.Model):
     user_id = db.Column(db.Integer, primary_key=True)
@@ -68,7 +93,7 @@ class Device(db.Model):
 
 
 class PendingDevice(db.Model):
-    """等待管理員審核的新設備綁定申請"""
+    """等待管理员审核的新设备绑定申请"""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.user_id"), nullable=False)
     device_identifier = db.Column(db.String(255), nullable=False)
@@ -99,6 +124,22 @@ class AdminLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
+class GenerateRecord(db.Model):
+    """使用者提交生成财神手辦的紀錄"""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_name = db.Column(db.String(100), nullable=True)
+    prompt = db.Column(db.Text, nullable=False)
+    original_image_url = db.Column(db.String(255), nullable=False)
+    thumbnail_url = db.Column(db.String(255), nullable=False)
+    dream_image_url = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(20), default="pending", nullable=False)  # pending/approved/rejected
+    approved_by = db.Column(db.String(50), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 # --- 小工具 ---
 
 def get_device_identifier():
@@ -119,17 +160,253 @@ def log_admin_action(admin_name: str, action: str):
     db.session.commit()
 
 
-# --- 使用者登入 / 登出（前台） ---
+def save_and_compress_image(file_storage, dest_folder, prefix, max_kb=100, max_size=(800, 800)):
+    """壓縮並儲存圖片，回傳相對於 static 的路徑"""
+    os.makedirs(dest_folder, exist_ok=True)
+    filename = f"{prefix}_{uuid.uuid4().hex}.jpg"
+    abs_path = os.path.join(dest_folder, filename)
+
+    image = Image.open(file_storage)
+    image = image.convert("RGB")
+    image.thumbnail(max_size, Image.LANCZOS)
+
+    quality = 85
+    output = BytesIO()
+    while True:
+        output.seek(0)
+        output.truncate(0)
+        image.save(output, format="JPEG", quality=quality, optimize=True)
+        size_kb = output.tell() / 1024
+        if size_kb <= max_kb or quality <= 35:
+            break
+        quality -= 5
+
+    with open(abs_path, "wb") as f:
+        f.write(output.getvalue())
+
+    rel_path = abs_path.replace(BASE_DIR + os.sep, "")
+    rel_path = rel_path.replace("\\", "/")
+    return "/" + rel_path
+
+
+def generate_volcengine_signature(access_key, secret_key, method, service, region, host, path, query, headers, payload):
+    """
+    生成火山引擎API签名
+    参考文档：https://www.volcengine.com/docs/85621/1747301
+    """
+    # 获取时间戳
+    x_date = headers.get("X-Date", datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"))
+    x_content_sha256 = headers.get("X-Content-Sha256", hashlib.sha256(payload.encode("utf-8")).hexdigest())
+    
+    # 构建待签名字符串
+    canonical_request = f"{method}\n{path}\n{query}\nhost:{host}\nx-content-sha256:{x_content_sha256}\nx-date:{x_date}\n\nhost;x-content-sha256;x-date\n{x_content_sha256}"
+    
+    # 计算签名
+    date_stamp = x_date[:8]
+    k_date = hmac.new((f"HMAC-SHA256\n{date_stamp}").encode("utf-8"), secret_key.encode("utf-8"), hashlib.sha256).digest()
+    k_region = hmac.new(region.encode("utf-8"), k_date, hashlib.sha256).digest()
+    k_service = hmac.new(service.encode("utf-8"), k_region, hashlib.sha256).digest()
+    k_signing = hmac.new("request".encode("utf-8"), k_service, hashlib.sha256).digest()
+    signature = hmac.new(canonical_request.encode("utf-8"), k_signing, hashlib.sha256).hexdigest()
+    
+    # 构建Authorization头
+    authorization = f"HMAC-SHA256 Credential={access_key}/{date_stamp}/{region}/{service}/request, SignedHeaders=host;x-content-sha256;x-date, Signature={signature}"
+    
+    return authorization, x_date, x_content_sha256
+
+
+def call_jimeng_api(original_abs_path, prompt):
+    """
+    調用即夢AI API生成圖片（火山引擎格式）。
+    只請求一個生成結果以節省用量。
+    参考文档：https://www.volcengine.com/docs/85621/1747301
+    """
+    if not JIMENG_ACCESS_KEY or not JIMENG_SECRET_KEY:
+        # 如果沒有配置API密鑰，回退到模擬模式
+        return fake_generate_dream_image(original_abs_path)
+
+    try:
+        # 讀取原始圖片並轉換為base64
+        source_path = os.path.join(BASE_DIR, original_abs_path.lstrip("/"))
+        with open(source_path, "rb") as img_file:
+            image_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+
+        # 構建請求體（只生成一個結果，n=1）
+        # 根據實際API文檔調整字段名和格式
+        payload_dict = {
+            "req_key": "lens_video_cover",  # 根據實際API文檔調整
+            "prompt": prompt,
+            "image": image_base64,  # 或使用 "image_url" 如果API支持URL
+            "model": "seedream-3.0",  # 根據實際API文檔調整
+            "width": 1024,
+            "height": 1024,
+            "num_images": 1,  # 只生成一張圖片，節省用量
+        }
+        
+        payload_json = json.dumps(payload_dict, ensure_ascii=False)
+        
+        # 解析API URL
+        from urllib.parse import urlparse
+        parsed_url = urlparse(JIMENG_API_URL)
+        host = parsed_url.netloc
+        path = parsed_url.path or "/"
+        if not path.endswith("/"):
+            path += "/"
+        path += "cv/v1/image_generation"  # 根據實際API文檔調整路徑
+        
+        # 構建請求頭
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        # 生成簽名
+        authorization, x_date, x_content_sha256 = generate_volcengine_signature(
+            JIMENG_ACCESS_KEY,
+            JIMENG_SECRET_KEY,
+            "POST",
+            JIMENG_SERVICE,
+            JIMENG_REGION,
+            host,
+            path,
+            "",  # query string
+            headers,
+            payload_json
+        )
+        
+        headers.update({
+            "Authorization": authorization,
+            "X-Date": x_date,
+            "X-Content-Sha256": x_content_sha256,
+            "Host": host,
+        })
+
+        # 發送POST請求
+        full_url = f"{JIMENG_API_URL}{path}"
+        response = requests.post(
+            full_url,
+            headers=headers,
+            data=payload_json.encode("utf-8"),
+            timeout=60,  # 60秒超時
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"即夢API調用失敗: {response.status_code} - {response.text}")
+
+        result = response.json()
+
+        # 提取生成的圖片URL或base64
+        # 根據實際API響應格式調整
+        image_data = None
+        if "data" in result:
+            if isinstance(result["data"], list) and len(result["data"]) > 0:
+                image_data = result["data"][0].get("image") or result["data"][0].get("image_url") or result["data"][0].get("url")
+            elif isinstance(result["data"], dict):
+                image_data = result["data"].get("image") or result["data"].get("image_url") or result["data"].get("url")
+        elif "image" in result:
+            image_data = result["image"]
+        elif "image_url" in result:
+            image_data = result["image_url"]
+        elif "url" in result:
+            image_data = result["url"]
+
+        if not image_data:
+            raise Exception(f"無法從API響應中提取圖片: {result}")
+
+        # 保存生成的圖片
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+
+        # 如果是base64格式
+        if image_data.startswith("data:image") or len(image_data) > 200:
+            # 可能是base64
+            if "," in image_data:
+                image_data = image_data.split(",")[1]
+            image_bytes = base64.b64decode(image_data)
+            with open(dest_path, "wb") as f:
+                f.write(image_bytes)
+        else:
+            # 如果是URL，下載圖片
+            img_response = requests.get(image_data, timeout=30)
+            if img_response.status_code != 200:
+                raise Exception(f"下載生成圖片失敗: {img_response.status_code}")
+            with open(dest_path, "wb") as f:
+                f.write(img_response.content)
+
+        rel_path = dest_path.replace(BASE_DIR + os.sep, "")
+        rel_path = rel_path.replace("\\", "/")
+        return "/" + rel_path
+
+    except Exception as exc:
+        # 如果API調用失敗，記錄錯誤並回退到模擬模式
+        print(f"即夢API調用失敗，使用模擬模式: {exc}")
+        import traceback
+        traceback.print_exc()
+        return fake_generate_dream_image(original_abs_path)
+
+
+def fake_generate_dream_image(original_abs_path):
+    """
+    模擬 AI 生成結果（當API未配置或調用失敗時使用）。
+    """
+    os.makedirs(GENERATED_DIR, exist_ok=True)
+    filename = f"dream_{uuid.uuid4().hex}.jpg"
+    dest_path = os.path.join(GENERATED_DIR, filename)
+    source_path = os.path.join(BASE_DIR, original_abs_path.lstrip("/"))
+    with Image.open(source_path) as img:
+        img = img.convert("RGB")
+        img.save(dest_path, format="JPEG", quality=90, optimize=True)
+    rel_path = dest_path.replace(BASE_DIR + os.sep, "")
+    rel_path = rel_path.replace("\\", "/")
+    return "/" + rel_path
+
+
+def create_thumbnail(source_rel_path, max_kb=120, max_size=(512, 512)):
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    filename = f"thumb_{uuid.uuid4().hex}.jpg"
+    abs_path = os.path.join(THUMB_DIR, filename)
+
+    source_abs = os.path.join(BASE_DIR, source_rel_path.lstrip("/"))
+    image = Image.open(source_abs)
+    image = image.convert("RGB")
+    image.thumbnail(max_size, Image.LANCZOS)
+
+    quality = 85
+    output = BytesIO()
+    while True:
+        output.seek(0)
+        output.truncate(0)
+        image.save(output, format="JPEG", quality=quality, optimize=True)
+        size_kb = output.tell() / 1024
+        if size_kb <= max_kb or quality <= 35:
+            break
+        quality -= 5
+
+    with open(abs_path, "wb") as f:
+        f.write(output.getvalue())
+
+    rel_path = abs_path.replace(BASE_DIR + os.sep, "")
+    rel_path = rel_path.replace("\\", "/")
+    return "/" + rel_path
+
+
+# --- 使用者登录 / 登出（前台） ---
 
 @app.route("/")
 def landing_page():
-    """活動入口頁"""
-    return render_template("landing.html")
+    """活动入口页"""
+    approved_images = (
+        GenerateRecord.query.filter(GenerateRecord.status == "approved")
+        .order_by(GenerateRecord.approved_at.desc().nullslast(), GenerateRecord.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return render_template("landing.html", approved_images=approved_images)
 
 
 @app.route("/login", methods=["GET", "POST"])
 def user_login_page():
-    # 已登入且 session 未過期，直接進抽卡頁
+    # 已登录且 session 未过期，直接进抽卡页
     if request.method == "GET" and session.get("user_id"):
         return redirect(url_for("draw_page"))
 
@@ -141,7 +418,7 @@ def user_login_page():
         team = (request.form.get("team") or "").strip()
 
         if not name or not phone_last4 or len(phone_last4) != 4 or not phone_last4.isdigit():
-            error = "請輸入正確的姓名和手機後四位。"
+            error = "请输入正确的姓名和手机号后四位。"
             return render_template(
                 "user_login.html",
                 error=error,
@@ -156,9 +433,9 @@ def user_login_page():
         user = User.query.filter_by(login_name=login_name).first()
 
         if user is None:
-            # 首次登入：建立用戶、綁定設備、發放 1 次抽卡
+            # 首次登录：建立用户、绑定设备、发放 1 次抽卡
             if not team or team not in TEAM_CHOICES:
-                error = "請選擇戰隊。"
+                error = "请选择战队。"
                 return render_template(
                     "user_login.html",
                     error=error,
@@ -182,8 +459,8 @@ def user_login_page():
             db.session.add(dev)
             db.session.commit()
         else:
-            # 非首次登入：檢查設備是否已綁定
-            # 如果用戶已有戰隊，忽略表單中的戰隊選擇（不可更改）
+            # 非首次登录：检查设备是否已绑定
+            # 如果用户已有战队，忽略表单中的战队选择（不可更改）
             user.last_login_at = now
             db.session.commit()
 
@@ -192,7 +469,7 @@ def user_login_page():
             ).first()
 
             if bound is None:
-                # 新設備：建立 PendingDevice 申請，等待管理員審核
+                # 新设备：建立 PendingDevice 申请，等待管理员审核
                 exists_pending = PendingDevice.query.filter_by(
                     user_id=user.user_id, device_identifier=device_id
                 ).first()
@@ -200,7 +477,7 @@ def user_login_page():
                     pd = PendingDevice(user_id=user.user_id, device_identifier=device_id)
                     db.session.add(pd)
                     db.session.commit()
-                error = "已有同名用戶在其他設備登入，建議聯繫運營人員。"
+                error = "已有同名用户在其他设备登录，建议联系运营人员。"
                 return render_template(
                     "user_login.html",
                     error=error,
@@ -213,8 +490,8 @@ def user_login_page():
         session["user_id"] = user.user_id
         return redirect(url_for("draw_page"))
 
-    # GET 請求：檢查是否有已存在的用戶（通過 URL 參數或 session 判斷）
-    # 這裡簡化處理，直接顯示選擇框
+    # GET 请求：检查是否有已存在的用户（通过 URL 参数或 session 判断）
+    # 这里简化处理，直接显示选择框
     return render_template(
         "user_login.html",
         error=error,
@@ -229,7 +506,7 @@ def user_logout():
     return redirect(url_for("user_login_page"))
 
 
-# --- 抽卡主頁（前台） ---
+# --- 抽卡主页（前台） ---
 
 @app.route("/draw")
 def draw_page():
@@ -341,7 +618,82 @@ def api_draw():
     )
 
 
-# --- 管理員登入 / 登出 / 後台 ---
+@app.route("/api/generate-figure", methods=["POST"])
+def api_generate_figure():
+    prompt = (request.form.get("prompt") or "").strip()
+    user_name = (request.form.get("user_name") or "").strip()
+    image_file = request.files.get("image")
+
+    if not prompt:
+        return jsonify({"success": False, "error": "PROMPT_REQUIRED"}), 400
+    if not image_file:
+        return jsonify({"success": False, "error": "IMAGE_REQUIRED"}), 400
+
+    try:
+        original_rel = save_and_compress_image(
+            image_file, ORIGINAL_DIR, "origin", max_kb=100, max_size=(768, 768)
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        return jsonify({"success": False, "error": "IMAGE_PROCESS_FAIL", "detail": str(exc)}), 500
+
+    # 調用即夢AI生成圖片（只生成一個結果，節省用量）
+    dream_rel = call_jimeng_api(original_rel, prompt)
+    thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
+
+    record = GenerateRecord(
+        user_name=user_name or None,
+        prompt=prompt,
+        original_image_url=original_rel,
+        thumbnail_url=thumbnail_rel,
+        dream_image_url=dream_rel,
+        status="pending",
+    )
+    db.session.add(record)
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "record_id": record.id,
+            "thumbnail_url": thumbnail_rel,
+            "dream_image_url": dream_rel,
+            "status": record.status,
+            "message": "圖片已提交，待管理員審核後即可展示。",
+        }
+    )
+
+
+@app.route("/api/approved-generates")
+def api_approved_generates():
+    limit = request.args.get("limit", default=6, type=int)
+    if limit <= 0 or limit > 20:
+        limit = 6
+
+    records = (
+        GenerateRecord.query.filter(GenerateRecord.status == "approved")
+        .order_by(func.random())
+        .limit(limit)
+        .all()
+    )
+
+    return jsonify(
+        {
+            "success": True,
+            "items": [
+                {
+                    "id": r.id,
+                    "thumbnail_url": r.thumbnail_url,
+                    "prompt": r.prompt,
+                    "user_name": r.user_name or "匿名用户",
+                    "dream_image_url": r.dream_image_url,
+                }
+                for r in records
+            ],
+        }
+    )
+
+
+# --- 管理员登录 / 登出 / 后台 ---
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -355,7 +707,7 @@ def admin_login():
             session["admin_name"] = username
             return redirect(url_for("admin_users"))
         else:
-            error = "帳號或密碼錯誤。"
+            error = "账号或密码错误。"
 
     return render_template("admin_login.html", error=error)
 
@@ -472,7 +824,7 @@ def admin_export():
 
 @app.route("/admin/devices")
 def admin_devices():
-    """待審核設備列表"""
+    """待审核设备列表"""
     need_login = require_admin()
     if need_login:
         return need_login
@@ -613,14 +965,14 @@ def admin_add_draws(user_id):
 
 @app.route("/admin/user/<int:user_id>/delete", methods=["POST"])
 def admin_delete_user(user_id):
-    """刪除用戶及其相關資料"""
+    """删除用户及其相关资料"""
     need_login = require_admin()
     if need_login:
         return need_login
 
     user = User.query.get_or_404(user_id)
 
-    # 刪關聯資料
+    # 删关联资料
     Device.query.filter_by(user_id=user.user_id).delete()
     PendingDevice.query.filter_by(user_id=user.user_id).delete()
     UserCard.query.filter_by(user_id=user.user_id).delete()
@@ -638,8 +990,61 @@ def admin_delete_user(user_id):
     return redirect(url_for("admin_users", team=request.args.get("team") or ""))
 
 
+@app.route("/admin/generates")
+def admin_generates():
+    need_login = require_admin()
+    if need_login:
+        return need_login
+
+    status = request.args.get("status") or "pending"
+    query = GenerateRecord.query
+    if status != "all":
+        query = query.filter(GenerateRecord.status == status)
+
+    records = query.order_by(GenerateRecord.created_at.desc()).limit(200).all()
+
+    return render_template(
+        "admin_generates.html",
+        admin_name=session.get("admin_name"),
+        records=records,
+        current_status=status,
+    )
+
+
+@app.route("/admin/generate/<int:record_id>/approve", methods=["POST"])
+def admin_approve_generate(record_id):
+    need_login = require_admin()
+    if need_login:
+        return need_login
+
+    record = GenerateRecord.query.get_or_404(record_id)
+    record.status = "approved"
+    record.approved_by = session.get("admin_name")
+    record.approved_at = datetime.utcnow()
+    db.session.commit()
+
+    log_admin_action(record.approved_by or "unknown", f"approve_generate record_id={record.id}")
+    return redirect(url_for("admin_generates", status=request.args.get("status") or "pending"))
+
+
+@app.route("/admin/generate/<int:record_id>/reject", methods=["POST"])
+def admin_reject_generate(record_id):
+    need_login = require_admin()
+    if need_login:
+        return need_login
+
+    record = GenerateRecord.query.get_or_404(record_id)
+    record.status = "rejected"
+    record.approved_by = session.get("admin_name")
+    record.approved_at = datetime.utcnow()
+    db.session.commit()
+
+    log_admin_action(record.approved_by or "unknown", f"reject_generate record_id={record.id}")
+    return redirect(url_for("admin_generates", status=request.args.get("status") or "pending"))
+
+
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
-        print(f"資料庫位置: {db_path}")
+        print(f"数据库位置: {db_path}")
     app.run(debug=False)

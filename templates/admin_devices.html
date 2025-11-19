@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-Hans">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>管理員後台 - 設備綁定審核</title>
+  <title>管理员后台 - 设备绑定审核</title>
   <style>
     body {
       margin: 0;
@@ -113,11 +113,12 @@
 <body>
   <div class="layout">
     <div class="sidebar">
-      <div class="logo">抽卡後台</div>
-      <div class="admin-name">管理員：{{ admin_name }}</div>
+      <div class="logo">抽卡后台</div>
+      <div class="admin-name">管理员：{{ admin_name }}</div>
 
-      <a href="{{ url_for('admin_users') }}" class="nav-link">用戶列表</a>
-      <a href="{{ url_for('admin_devices') }}" class="nav-link active">設備綁定審核</a>
+      <a href="{{ url_for('admin_users') }}" class="nav-link">用户列表</a>
+      <a href="{{ url_for('admin_devices') }}" class="nav-link active">设备绑定审核</a>
+      <a href="{{ url_for('admin_generates') }}" class="nav-link">生成结果审核</a>
 
       <div class="logout">
         <a href="{{ url_for('admin_logout') }}" class="nav-link">登出</a>
@@ -125,17 +126,17 @@
     </div>
 
     <div class="main">
-      <div class="page-title">待審核設備綁定</div>
+      <div class="page-title">待审核设备绑定</div>
 
       <table>
         <thead>
           <tr>
-            <th>申請ID</th>
-            <th>用戶ID</th>
+            <th>申请ID</th>
+            <th>用户ID</th>
             <th>姓名</th>
-            <th>登入名</th>
-            <th>設備ID</th>
-            <th>申請時間</th>
+            <th>登录名</th>
+            <th>设备ID</th>
+            <th>申请时间</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -155,7 +156,7 @@
                   method="post"
                   action="{{ url_for('admin_approve_device', pending_id=p.pending_id) }}"
                 >
-                  <button class="btn approve" type="submit">允許此設備</button>
+                  <button class="btn approve" type="submit">允许此设备</button>
                 </form>
                 <form
                   class="inline"
@@ -163,7 +164,7 @@
                   action="{{ url_for('admin_reject_device', pending_id=p.pending_id) }}"
                   style="margin-left:4px;"
                 >
-                  <button class="btn reject" type="submit">拒絕</button>
+                  <button class="btn reject" type="submit">拒绝</button>
                 </form>
               </td>
             </tr>
@@ -171,7 +172,7 @@
           {% else %}
             <tr>
               <td colspan="7" style="font-size:12px; color:#9ca3af;">
-                目前沒有待審核的設備綁定申請。
+                目前没有待审核的设备绑定申请。
               </td>
             </tr>
           {% endif %}
