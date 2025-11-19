@@ -557,16 +557,22 @@ def create_thumbnail(source_rel_path, max_kb=120, max_size=(512, 512)):
 @app.route("/")
 def landing_page():
     """活动入口页"""
-    # 使用更兼容的排序方式
-    approved_images = (
-        GenerateRecord.query.filter(GenerateRecord.status == "approved")
-        .order_by(
-            func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at).desc(),
-            GenerateRecord.created_at.desc()
+    try:
+        # 使用更兼容的排序方式
+        approved_images = (
+            GenerateRecord.query.filter(GenerateRecord.status == "approved")
+            .order_by(
+                func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at).desc(),
+                GenerateRecord.created_at.desc()
+            )
+            .limit(10)
+            .all()
         )
-        .limit(10)
-        .all()
-    )
+    except Exception as exc:
+        # 如果查询失败（可能是表不存在），返回空列表
+        print(f"查询已审核图片失败: {exc}")
+        approved_images = []
+    
     return render_template("landing.html", approved_images=approved_images)
 
 
@@ -1264,8 +1270,14 @@ def admin_reject_generate(record_id):
     return redirect(url_for("admin_generates", status=request.args.get("status") or "pending"))
 
 
-if __name__ == "__main__":
-    with app.app_context():
+# 应用启动时自动初始化数据库表（适用于所有启动方式）
+with app.app_context():
+    try:
         db.create_all()
         print(f"数据库位置: {db_path}")
+        print("数据库表已初始化")
+    except Exception as exc:
+        print(f"数据库初始化警告: {exc}")
+
+if __name__ == "__main__":
     app.run(debug=False)
