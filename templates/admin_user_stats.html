@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>管理员后台 - 用户统计</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #020617;
+      color: #e5e7eb;
+    }
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 220px;
+      background: #0f172a;
+      padding: 18px 16px;
+      box-sizing: border-box;
+      border-right: 1px solid #1f2937;
+    }
+    .main {
+      flex: 1;
+      padding: 16px 18px 24px;
+      box-sizing: border-box;
+    }
+    .logo {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .admin-name {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 20px;
+    }
+    .nav-link {
+      display: block;
+      font-size: 14px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: #e5e7eb;
+      text-decoration: none;
+      margin-bottom: 4px;
+    }
+    .nav-link.active {
+      background: #1d4ed8;
+    }
+    .nav-link:hover {
+      background: #111827;
+    }
+    .logout {
+      margin-top: 20px;
+      font-size: 13px;
+    }
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .filter-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .filter-form label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    input[type="date"],
+    input[type="text"] {
+      background: #020617;
+      color: #e5e7eb;
+      border: 1px solid #4b5563;
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 13px;
+    }
+    .btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      border: 1px solid #2563eb;
+      background: #1d4ed8;
+      color: #fff;
+      cursor: pointer;
+    }
+    .summary {
+      font-size: 13px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    th, td {
+      border-bottom: 1px solid #1f2937;
+      padding: 6px 4px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    th {
+      color: #9ca3af;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 11px;
+    }
+    .empty {
+      font-size: 12px;
+      color: #9ca3af;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="logo">抽卡后台</div>
+      <div class="admin-name">管理员：{{ admin_name }}</div>
+
+      <a href="{{ url_for('admin_users') }}" class="nav-link">用户列表</a>
+      <a href="{{ url_for('admin_user_stats') }}" class="nav-link active">用户统计</a>
+      <a href="{{ url_for('admin_devices') }}" class="nav-link">设备绑定审核</a>
+      <a href="{{ url_for('admin_generates') }}" class="nav-link">生成结果审核</a>
+
+      <div class="logout">
+        <a href="{{ url_for('admin_logout') }}" class="nav-link">登出</a>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="page-title">用户统计</div>
+
+      <form class="filter-form" method="get" action="{{ url_for('admin_user_stats') }}">
+        <label>
+          开始日期
+          <input type="date" name="start_date" value="{{ start_date }}">
+        </label>
+        <label>
+          结束日期
+          <input type="date" name="end_date" value="{{ end_date }}">
+        </label>
+        <label style="flex:1; min-width: 160px;">
+          用户名关键词
+          <input type="text" name="keyword" placeholder="输入姓名关键词" value="{{ keyword }}">
+        </label>
+        <button class="btn" type="submit">筛选</button>
+      </form>
+
+      <div class="summary">
+        当前结果：财神卡 {{ total_cards }} 张，上传 {{ total_uploads }} 次，生成 {{ total_generates }} 次
+      </div>
+
+      {% if stats_rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>姓名</th>
+            <th>战队</th>
+            <th>时间段内首次获得卡数</th>
+            <th>上传图片次数</th>
+            <th>生成图片次数</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in stats_rows %}
+          <tr>
+            <td class="mono">{{ row.user.user_id }}</td>
+            <td>{{ row.user.name }}</td>
+            <td>{{ row.user.team or '-' }}</td>
+            <td>{{ row.card_count }}</td>
+            <td>{{ row.upload_count }}</td>
+            <td>{{ row.generate_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">
+        暂无符合条件的用户数据。
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>
+

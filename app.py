@@ -3,13 +3,14 @@ from io import StringIO, BytesIO
 import csv
 import os
 import random
+import time as pytime
 import uuid
 import base64
 import requests
 import hmac
 import hashlib
 import json
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlparse
 
 from flask import (
     Flask,
@@ -22,7 +23,7 @@ from flask import (
     Response,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func
+from sqlalchemy import func, case
 from PIL import Image
 
 print(">>> app.py 已被执行")
@@ -60,13 +61,37 @@ TEAM_CHOICES = ["青龙战队", "白虎战队", "朱雀战队", "玄武战队", 
 # 即梦AI配置（从环境变量读取，如果没有则使用默认值）
 # 根据火山引擎API文档：https://www.volcengine.com/docs/85621/1747301
 JIMENG_API_URL = os.getenv("JIMENG_API_URL", "https://visual.volcengineapi.com")
+JIMENG_API_PATH = os.getenv("JIMENG_API_PATH", "/")
 JIMENG_ACCESS_KEY = os.getenv("JIMENG_ACCESS_KEY", "")  # AK - 从环境变量读取
 JIMENG_SECRET_KEY = os.getenv("JIMENG_SECRET_KEY", "")  # SK - 从环境变量读取
 JIMENG_SERVICE = os.getenv("JIMENG_SERVICE", "cv")  # 服务名
 JIMENG_REGION = os.getenv("JIMENG_REGION", "cn-north-1")  # 区域
-JIMENG_ACTION = os.getenv("JIMENG_ACTION", "GenerateImage")
-JIMENG_VERSION = os.getenv("JIMENG_VERSION", "2023-11-01")
+JIMENG_SUBMIT_ACTION = os.getenv("JIMENG_SUBMIT_ACTION", "CVSync2AsyncSubmitTask")
+JIMENG_RESULT_ACTION = os.getenv("JIMENG_RESULT_ACTION", "CVSync2AsyncGetResult")
+JIMENG_VERSION = os.getenv("JIMENG_VERSION", "2022-08-31")
+JIMENG_REQ_KEY = os.getenv("JIMENG_REQ_KEY", "i2i_v30_jimeng")
 JIMENG_ALLOW_FALLBACK = os.getenv("JIMENG_ALLOW_FALLBACK", "false").lower() == "true"
+
+
+def _env_float(var_name, default_value):
+    try:
+        return float(os.getenv(var_name, default_value))
+    except (TypeError, ValueError):
+        return float(default_value)
+
+
+JIMENG_RESULT_POLL_INTERVAL = _env_float("JIMENG_POLL_INTERVAL", 3)
+JIMENG_RESULT_TIMEOUT = _env_float("JIMENG_POLL_TIMEOUT", 90)
+JIMENG_DEFAULT_SCALE = _env_float("JIMENG_DEFAULT_SCALE", 0.5)
+
+
+def parse_date_input(date_text):
+    if not date_text:
+        return None
+    try:
+        return datetime.strptime(date_text, "%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 # --- 资料表定义 ---
@@ -354,159 +379,287 @@ def save_and_compress_image(file_storage, dest_folder, prefix, max_kb=100, max_s
     return "/" + rel_path
 
 
-def generate_volcengine_signature(access_key, secret_key, method, service, region, host, path, query, headers, payload):
+def generate_volcengine_signature(
+    access_key,
+    secret_key,
+    method,
+    service,
+    region,
+    host,
+    path,
+    query,
+    headers,
+    payload,
+):
     """
-    生成火山引擎API签名
+    生成火山引擎API签名（HMAC-SHA256）
     参考文档：https://www.volcengine.com/docs/85621/1747301
     """
-    # 获取时间戳
+    method = method.upper()
     x_date = headers.get("X-Date", datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"))
-    x_content_sha256 = headers.get("X-Content-Sha256", hashlib.sha256(payload.encode("utf-8")).hexdigest())
-    
-    # 构建待签名字符串
-    canonical_request = f"{method}\n{path}\n{query}\nhost:{host}\nx-content-sha256:{x_content_sha256}\nx-date:{x_date}\n\nhost;x-content-sha256;x-date\n{x_content_sha256}"
-    
-    # 计算签名
+    payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    canonical_headers_map = {
+        "host": host.strip().lower(),
+        "x-content-sha256": headers.get("X-Content-Sha256", payload_hash),
+        "x-date": x_date,
+    }
+
+    for key, value in headers.items():
+        lower_key = key.strip().lower()
+        if lower_key in canonical_headers_map:
+            canonical_headers_map[lower_key] = value.strip()
+        else:
+            canonical_headers_map[lower_key] = value.strip()
+
+    sorted_headers = sorted(canonical_headers_map.items())
+    canonical_headers = "".join(f"{k}:{v}\n" for k, v in sorted_headers)
+    signed_headers = ";".join(k for k, _ in sorted_headers)
+
+    canonical_request = (
+        f"{method}\n"
+        f"{path}\n"
+        f"{query}\n"
+        f"{canonical_headers}\n"
+        f"{signed_headers}\n"
+        f"{payload_hash}"
+    )
+
+    hashed_canonical_request = hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
     date_stamp = x_date[:8]
-    k_date = hmac.new((f"HMAC-SHA256\n{date_stamp}").encode("utf-8"), secret_key.encode("utf-8"), hashlib.sha256).digest()
-    k_region = hmac.new(region.encode("utf-8"), k_date, hashlib.sha256).digest()
-    k_service = hmac.new(service.encode("utf-8"), k_region, hashlib.sha256).digest()
-    k_signing = hmac.new("request".encode("utf-8"), k_service, hashlib.sha256).digest()
-    signature = hmac.new(canonical_request.encode("utf-8"), k_signing, hashlib.sha256).hexdigest()
-    
-    # 构建Authorization头
-    authorization = f"HMAC-SHA256 Credential={access_key}/{date_stamp}/{region}/{service}/request, SignedHeaders=host;x-content-sha256;x-date, Signature={signature}"
-    
-    return authorization, x_date, x_content_sha256
+    scope = f"{date_stamp}/{region}/{service}/request"
+    string_to_sign = f"HMAC-SHA256\n{x_date}\n{scope}\n{hashed_canonical_request}"
+
+    def _sign(key_bytes, msg):
+        return hmac.new(key_bytes, msg.encode("utf-8"), hashlib.sha256).digest()
+
+    k_secret = ("HMAC-SHA256" + secret_key).encode("utf-8")
+    k_date = _sign(k_secret, date_stamp)
+    k_region = _sign(k_date, region)
+    k_service = _sign(k_region, service)
+    k_signing = _sign(k_service, "request")
+    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    authorization = (
+        f"HMAC-SHA256 Credential={access_key}/{scope}, "
+        f"SignedHeaders={signed_headers}, Signature={signature}"
+    )
+
+    return authorization, x_date, payload_hash
+
+
+def _normalize_api_path(path_text):
+    if not path_text:
+        return "/"
+    if not path_text.startswith("/"):
+        return f"/{path_text}"
+    return path_text
+
+
+def _build_jimeng_request_components():
+    parsed = urlparse(JIMENG_API_URL)
+    scheme = parsed.scheme or "https"
+    host = parsed.netloc or parsed.path
+    if not host:
+        raise RuntimeError("JIMENG_API_URL 配置無效，缺少主機名稱")
+    base_path = parsed.path if parsed.netloc else ""
+    path = _normalize_api_path(JIMENG_API_PATH or base_path or "/")
+    return scheme, host, path
+
+
+def _jimeng_make_request(action, payload_dict):
+    if not action:
+        raise RuntimeError("缺少即夢API動作(Action)")
+
+    payload_json = json.dumps(payload_dict, ensure_ascii=False)
+    scheme, host, path = _build_jimeng_request_components()
+
+    query_items = [("Action", action)]
+    if JIMENG_VERSION:
+        query_items.append(("Version", JIMENG_VERSION))
+    query_string = urlencode(sorted(query_items))
+
+    headers = {
+        "Content-Type": "application/json",
+    }
+
+    authorization, x_date, payload_hash = generate_volcengine_signature(
+        JIMENG_ACCESS_KEY,
+        JIMENG_SECRET_KEY,
+        "POST",
+        JIMENG_SERVICE,
+        JIMENG_REGION,
+        host,
+        path,
+        query_string,
+        headers,
+        payload_json,
+    )
+
+    headers.update(
+        {
+            "Authorization": authorization,
+            "X-Date": x_date,
+            "X-Content-Sha256": payload_hash,
+            "Host": host,
+        }
+    )
+
+    if query_string:
+        url = f"{scheme}://{host}{path}?{query_string}"
+    else:
+        url = f"{scheme}://{host}{path}"
+
+    response = requests.post(
+        url,
+        headers=headers,
+        data=payload_json.encode("utf-8"),
+        timeout=60,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(f"即夢API調用失敗: {response.status_code} - {response.text}")
+
+    body = response.json()
+    error_info = body.get("ResponseMetadata", {}).get("Error")
+    if error_info:
+        raise RuntimeError(
+            f"即夢API錯誤: {error_info.get('Code')} - {error_info.get('Message')}"
+        )
+
+    return body
+
+
+def _extract_task_id(response_json):
+    candidates = []
+    for key in ("TaskId", "task_id", "TaskID"):
+        if isinstance(response_json, dict):
+            direct_value = response_json.get(key)
+            if direct_value:
+                candidates.append(direct_value)
+            result_value = response_json.get("Result", {}).get(key)
+            if result_value:
+                candidates.append(result_value)
+    if not candidates and isinstance(response_json, dict):
+        result_node = response_json.get("Result") or {}
+        if isinstance(result_node, dict):
+            for value in result_node.values():
+                if isinstance(value, str) and value.startswith("task"):
+                    candidates.append(value)
+    return candidates[0] if candidates else None
+
+
+def _wait_for_jimeng_task(task_id):
+    deadline = pytime.time() + JIMENG_RESULT_TIMEOUT
+    last_status = None
+    while pytime.time() < deadline:
+        result_resp = _jimeng_make_request(JIMENG_RESULT_ACTION, {"TaskId": task_id})
+        result_data = result_resp.get("Result") or {}
+        status = (
+            result_data.get("Status")
+            or result_data.get("TaskStatus")
+            or result_data.get("status")
+            or result_data.get("State")
+            or ""
+        ).upper()
+        if status in {"FINISHED", "SUCCESS", "SUCCEEDED", "SUCCEED", "DONE"}:
+            return result_data
+        if status in {"FAILED", "ERROR", "CANCELED", "CANCELLED"}:
+            reason = (
+                result_data.get("FailReason")
+                or result_data.get("Message")
+                or "未知錯誤"
+            )
+            raise RuntimeError(f"即夢任務失敗: {reason}")
+        last_status = status or "PENDING"
+        pytime.sleep(JIMENG_RESULT_POLL_INTERVAL)
+
+    raise TimeoutError(
+        f"即夢任務逾時未完成 (TaskId={task_id}, last_status={last_status})"
+    )
+
+
+def _looks_like_image_data(value: str) -> bool:
+    if not value:
+        return False
+    value = value.strip()
+    if value.startswith(("http://", "https://", "data:image")):
+        return True
+    if len(value) < 128:
+        return False
+    try:
+        base64.b64decode(value, validate=True)
+        return True
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def _extract_image_from_result(result_node):
+    queue = [result_node]
+    while queue:
+        current = queue.pop(0)
+        if isinstance(current, dict):
+            for value in current.values():
+                if isinstance(value, str) and _looks_like_image_data(value):
+                    return value
+                if isinstance(value, (dict, list)):
+                    queue.append(value)
+        elif isinstance(current, list):
+            for item in current:
+                if isinstance(item, str) and _looks_like_image_data(item):
+                    return item
+                if isinstance(item, (dict, list)):
+                    queue.append(item)
+    return None
 
 
 def call_jimeng_api(original_abs_path, prompt):
     """
-    調用即夢AI API生成圖片（火山引擎格式）。
-    只請求一個生成結果以節省用量。
-    参考文档：https://www.volcengine.com/docs/85621/1747301
+    使用火山引擎同步轉異步接口調用即夢圖生圖3.0。
     """
     if not JIMENG_ACCESS_KEY or not JIMENG_SECRET_KEY:
         raise RuntimeError("JIMENG_API_KEY_MISSING")
 
     try:
-        # 讀取原始圖片並轉換為base64
+        # 準備圖片資料
         source_path = os.path.join(BASE_DIR, original_abs_path.lstrip("/"))
         with open(source_path, "rb") as img_file:
             image_base64 = base64.b64encode(img_file.read()).decode("utf-8")
 
-        # 構建請求體（只生成一個結果，n=1）
-        # 根據實際API文檔調整字段名和格式
-        payload_dict = {
-            "req_key": "lens_video_cover",  # 根據實際API文檔調整
+        submit_payload = {
+            "req_key": JIMENG_REQ_KEY,
             "prompt": prompt,
-            "image": image_base64,  # 或使用 "image_url" 如果API支持URL
-            "model": "seedream-3.0",  # 根據實際API文檔調整
-            "width": 1024,
-            "height": 1024,
-            "num_images": 1,  # 只生成一張圖片，節省用量
+            "scale": JIMENG_DEFAULT_SCALE,
+            "image_base64_list": [image_base64],
         }
-        
-        payload_json = json.dumps(payload_dict, ensure_ascii=False)
-        
-        # 解析API URL與查詢參數
-        from urllib.parse import urlparse
-        parsed_url = urlparse(JIMENG_API_URL)
-        host = parsed_url.netloc
-        path = parsed_url.path or "/"
-        if not path.endswith("/"):
-            path += "/"
-        path += "cv/v1/image_generation"  # 根據實際API文檔調整路徑
+        submit_resp = _jimeng_make_request(JIMENG_SUBMIT_ACTION, submit_payload)
+        task_id = _extract_task_id(submit_resp)
+        if not task_id:
+            raise RuntimeError(f"即夢提交成功但無法取得TaskId: {submit_resp}")
 
-        query_items = []
-        if JIMENG_ACTION:
-            query_items.append(("Action", JIMENG_ACTION))
-        if JIMENG_VERSION:
-            query_items.append(("Version", JIMENG_VERSION))
-        query_string = urlencode(sorted(query_items)) if query_items else ""
-
-        # 構建請求頭
-        headers = {
-            "Content-Type": "application/json",
-        }
-        
-        # 生成簽名
-        authorization, x_date, x_content_sha256 = generate_volcengine_signature(
-            JIMENG_ACCESS_KEY,
-            JIMENG_SECRET_KEY,
-            "POST",
-            JIMENG_SERVICE,
-            JIMENG_REGION,
-            host,
-            path,
-            query_string,
-            headers,
-            payload_json
-        )
-        
-        headers.update({
-            "Authorization": authorization,
-            "X-Date": x_date,
-            "X-Content-Sha256": x_content_sha256,
-            "Host": host,
-        })
-
-        # 發送POST請求
-        if query_string:
-            full_url = f"{JIMENG_API_URL}{path}?{query_string}"
-        else:
-            full_url = f"{JIMENG_API_URL}{path}"
-        response = requests.post(
-            full_url,
-            headers=headers,
-            data=payload_json.encode("utf-8"),
-            timeout=60,  # 60秒超時
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"即夢API調用失敗: {response.status_code} - {response.text}")
-
-        result = response.json()
-        print("Jimeng result:", result)
-
-        # 提取生成的圖片URL或base64
-        # 根據實際API響應格式調整
-        image_data = None
-        if "data" in result:
-            if isinstance(result["data"], list) and len(result["data"]) > 0:
-                image_data = result["data"][0].get("image") or result["data"][0].get("image_url") or result["data"][0].get("url")
-            elif isinstance(result["data"], dict):
-                image_data = result["data"].get("image") or result["data"].get("image_url") or result["data"].get("url")
-        elif "image" in result:
-            image_data = result["image"]
-        elif "image_url" in result:
-            image_data = result["image_url"]
-        elif "url" in result:
-            image_data = result["url"]
-
+        print(f"Jimeng task submitted: {task_id}")
+        result_data = _wait_for_jimeng_task(task_id)
+        image_data = _extract_image_from_result(result_data)
         if not image_data:
-            raise RuntimeError(f"無法從API響應中提取圖片: {result}")
+            raise RuntimeError(f"即夢任務完成但無法取得圖像資料: {result_data}")
 
         # 保存生成的圖片
         os.makedirs(GENERATED_DIR, exist_ok=True)
         filename = f"dream_{uuid.uuid4().hex}.jpg"
         dest_path = os.path.join(GENERATED_DIR, filename)
 
-        # 如果是base64格式
-        if image_data.startswith("data:image") or len(image_data) > 200:
-            # 可能是base64
-            if "," in image_data:
-                image_data = image_data.split(",")[1]
-            image_bytes = base64.b64decode(image_data)
-            with open(dest_path, "wb") as f:
-                f.write(image_bytes)
-        else:
-            # 如果是URL，下載圖片
+        if image_data.startswith(("http://", "https://")):
             img_response = requests.get(image_data, timeout=30)
             if img_response.status_code != 200:
                 raise Exception(f"下載生成圖片失敗: {img_response.status_code}")
             with open(dest_path, "wb") as f:
                 f.write(img_response.content)
+        else:
+            if "," in image_data:
+                image_data = image_data.split(",")[1]
+            image_bytes = base64.b64decode(image_data)
+            with open(dest_path, "wb") as f:
+                f.write(image_bytes)
 
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
         rel_path = rel_path.replace("\\", "/")
@@ -972,6 +1125,115 @@ def admin_login():
 def admin_logout():
     session.pop("admin_name", None)
     return redirect(url_for("admin_login"))
+
+
+@app.route("/admin/user-stats")
+def admin_user_stats():
+    need_login = require_admin()
+    if need_login:
+        return need_login
+
+    keyword = (request.args.get("keyword") or "").strip()
+    start_date_str = (request.args.get("start_date") or "").strip()
+    end_date_str = (request.args.get("end_date") or "").strip()
+
+    start_dt = parse_date_input(start_date_str)
+    end_dt = parse_date_input(end_date_str)
+    end_dt_exclusive = end_dt + timedelta(days=1) if end_dt else None
+
+    user_query = User.query
+    if keyword:
+        user_query = user_query.filter(User.name.contains(keyword))
+    users = user_query.order_by(User.user_id.asc()).all()
+
+    user_ids = [u.user_id for u in users]
+    card_counts = {}
+    if user_ids:
+        card_first_sub = (
+            db.session.query(
+                UserCard.user_id.label("uid"),
+                UserCard.card_id.label("cid"),
+                func.min(UserCard.obtained_at).label("first_obtained"),
+            )
+            .group_by(UserCard.user_id, UserCard.card_id)
+            .subquery()
+        )
+
+        card_query = db.session.query(
+            card_first_sub.c.uid, func.count().label("cnt")
+        ).filter(card_first_sub.c.uid.in_(user_ids))
+
+        if start_dt:
+            card_query = card_query.filter(card_first_sub.c.first_obtained >= start_dt)
+        if end_dt_exclusive:
+            card_query = card_query.filter(
+                card_first_sub.c.first_obtained < end_dt_exclusive
+            )
+
+        for uid, cnt in card_query.all():
+            card_counts[uid] = cnt
+
+    generate_stats = {}
+    if user_ids:
+        gr_query = (
+            db.session.query(
+                func.lower(GenerateRecord.user_name).label("uname"),
+                func.count(GenerateRecord.id).label("upload_count"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (GenerateRecord.dream_image_url != None, 1),  # noqa: E711
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ).label("generate_count"),
+            )
+            .filter(GenerateRecord.user_name.isnot(None))
+            .filter(GenerateRecord.user_name != "")
+        )
+        if start_dt:
+            gr_query = gr_query.filter(GenerateRecord.created_at >= start_dt)
+        if end_dt_exclusive:
+            gr_query = gr_query.filter(GenerateRecord.created_at < end_dt_exclusive)
+
+        for row in gr_query.group_by(func.lower(GenerateRecord.user_name)).all():
+            generate_stats[row.uname] = {
+                "upload": row.upload_count,
+                "generate": row.generate_count or 0,
+            }
+
+    stats_rows = []
+    total_cards = total_uploads = total_generates = 0
+    for user in users:
+        name_key = (user.name or "").strip().lower()
+        gen_info = generate_stats.get(name_key, {"upload": 0, "generate": 0})
+        card_count = card_counts.get(user.user_id, 0)
+        upload_count = gen_info["upload"]
+        generate_count = gen_info["generate"]
+        total_cards += card_count
+        total_uploads += upload_count
+        total_generates += generate_count
+        stats_rows.append(
+            {
+                "user": user,
+                "card_count": card_count,
+                "upload_count": upload_count,
+                "generate_count": generate_count,
+            }
+        )
+
+    return render_template(
+        "admin_user_stats.html",
+        admin_name=session.get("admin_name"),
+        stats_rows=stats_rows,
+        total_cards=total_cards,
+        total_uploads=total_uploads,
+        total_generates=total_generates,
+        keyword=keyword,
+        start_date=start_date_str,
+        end_date=end_date_str,
+    )
 
 
 @app.route("/admin/users")
