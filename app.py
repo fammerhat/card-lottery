@@ -438,13 +438,11 @@ def generate_volcengine_signature(
     def _sign(key_bytes, msg):
         return hmac.new(key_bytes, msg.encode("utf-8"), hashlib.sha256).digest()
 
-    # 修复：Secret Key 是 base64 编码的，需要先解码
-    try:
-        # 尝试 base64 解码
-        k_secret = base64.b64decode(secret_key)
-    except Exception:
-        # 如果解码失败，直接使用原始字符串（向后兼容）
-        k_secret = secret_key.encode("utf-8")
+    # 修复：根据火山引擎官方文档，Secret Key 应该直接使用，不进行 base64 解码
+    # 即使 Secret Key 看起来像 base64（以 == 结尾），也应该直接使用原始字符串
+    # 参考：https://www.volcengine.com/docs/85621/1747301
+    k_secret = secret_key.encode("utf-8")
+    print(f"[DEBUG] Secret Key used directly (not base64 decoded), length: {len(k_secret)}")
     k_date = _sign(k_secret, date_stamp)
     k_region = _sign(k_date, region)
     k_service = _sign(k_region, service)
