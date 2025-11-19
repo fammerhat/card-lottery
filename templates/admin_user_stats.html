@@ -82,6 +82,16 @@
       border-radius: 6px;
       padding: 6px 8px;
       font-size: 13px;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      opacity: 1;
+      filter: invert(1);
     }
     .btn {
       padding: 6px 14px;

@@ -1226,6 +1226,8 @@ def admin_user_stats():
     mode_daily = bool(target_dt)
     if mode_daily:
         base_date = target_dt.date()
+        # 确保日期格式为 YYYY-MM-DD
+        target_date_str = base_date.strftime("%Y-%m-%d")
         day_end = datetime.combine(base_date, time(18, 0))
         day_start = day_end - timedelta(days=1)
         window_label = f"{day_start.strftime('%Y-%m-%d %H:%M')} 至 {day_end.strftime('%Y-%m-%d %H:%M')}"
