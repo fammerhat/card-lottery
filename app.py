@@ -438,7 +438,16 @@ def generate_volcengine_signature(
         f"{payload_hash}"
     )
 
-    hashed_canonical_request = hashlib.sha256(canonical_request.encode("utf-8")).hexdigest()
+    # 计算 canonical request 的哈希
+    canonical_request_bytes = canonical_request.encode("utf-8")
+    hashed_canonical_request = hashlib.sha256(canonical_request_bytes).hexdigest()
+    
+    # 验证：hashed_canonical_request 不应该等于 payload_hash
+    if hashed_canonical_request == payload_hash:
+        print(f"[ERROR] hashed_canonical_request == payload_hash! This is wrong!")
+        print(f"[ERROR] canonical_request length: {len(canonical_request_bytes)}")
+        print(f"[ERROR] canonical_request first 100 chars: {canonical_request[:100]}")
+    
     date_stamp = x_date[:8]
     scope = f"{date_stamp}/{region}/{service}/request"
     string_to_sign = f"HMAC-SHA256\n{x_date}\n{scope}\n{hashed_canonical_request}"
@@ -456,11 +465,23 @@ def generate_volcengine_signature(
         # 如果解码失败，直接使用原始字符串
         print(f"[DEBUG] Secret Key base64 decode failed: {e}, using raw string")
         k_secret = secret_key.encode("utf-8")
+    
+    # 计算签名密钥
     k_date = _sign(k_secret, date_stamp)
     k_region = _sign(k_date, region)
     k_service = _sign(k_region, service)
     k_signing = _sign(k_service, "request")
-    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+    
+    # 计算最终签名
+    signature_bytes = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).digest()
+    signature = signature_bytes.hex()
+    
+    # 验证：signature 不应该等于 payload_hash 或 hashed_canonical_request
+    if signature == payload_hash or signature == hashed_canonical_request:
+        print(f"[ERROR] signature matches payload_hash or hashed_canonical_request! This is wrong!")
+        print(f"[ERROR] signature: {signature}")
+        print(f"[ERROR] payload_hash: {payload_hash}")
+        print(f"[ERROR] hashed_canonical_request: {hashed_canonical_request}")
 
     authorization = (
         f"HMAC-SHA256 Credential={access_key}/{scope}, "
