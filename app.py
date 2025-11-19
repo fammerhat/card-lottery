@@ -64,6 +64,7 @@ JIMENG_ACCESS_KEY = os.getenv("JIMENG_ACCESS_KEY", "")  # AK - 从环境变量�
 JIMENG_SECRET_KEY = os.getenv("JIMENG_SECRET_KEY", "")  # SK - 从环境变量读取
 JIMENG_SERVICE = os.getenv("JIMENG_SERVICE", "cv")  # 服务名
 JIMENG_REGION = os.getenv("JIMENG_REGION", "cn-north-1")  # 区域
+JIMENG_ALLOW_FALLBACK = os.getenv("JIMENG_ALLOW_FALLBACK", "false").lower() == "true"
 
 
 # --- 资料表定义 ---
@@ -384,8 +385,7 @@ def call_jimeng_api(original_abs_path, prompt):
     参考文档：https://www.volcengine.com/docs/85621/1747301
     """
     if not JIMENG_ACCESS_KEY or not JIMENG_SECRET_KEY:
-        # 如果沒有配置API密鑰，回退到模擬模式
-        return fake_generate_dream_image(original_abs_path)
+        raise RuntimeError("JIMENG_API_KEY_MISSING")
 
     try:
         # 讀取原始圖片並轉換為base64
@@ -455,6 +455,7 @@ def call_jimeng_api(original_abs_path, prompt):
             raise Exception(f"即夢API調用失敗: {response.status_code} - {response.text}")
 
         result = response.json()
+        print("Jimeng result:", result)
 
         # 提取生成的圖片URL或base64
         # 根據實際API響應格式調整
@@ -472,7 +473,7 @@ def call_jimeng_api(original_abs_path, prompt):
             image_data = result["url"]
 
         if not image_data:
-            raise Exception(f"無法從API響應中提取圖片: {result}")
+            raise RuntimeError(f"無法從API響應中提取圖片: {result}")
 
         # 保存生成的圖片
         os.makedirs(GENERATED_DIR, exist_ok=True)
@@ -500,11 +501,13 @@ def call_jimeng_api(original_abs_path, prompt):
         return "/" + rel_path
 
     except Exception as exc:
-        # 如果API調用失敗，記錄錯誤並回退到模擬模式
-        print(f"即夢API調用失敗，使用模擬模式: {exc}")
+        print(f"即夢API調用失敗: {exc}")
         import traceback
         traceback.print_exc()
-        return fake_generate_dream_image(original_abs_path)
+        if JIMENG_ALLOW_FALLBACK:
+            print("使用本地 fallback 圖片")
+            return fake_generate_dream_image(original_abs_path)
+        raise
 
 
 def fake_generate_dream_image(original_abs_path):
