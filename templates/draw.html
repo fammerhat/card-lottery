@@ -448,12 +448,12 @@
     const loadingOverlay = document.getElementById("loadingOverlay");
 
     const CARD_NAMES = {
-      1: "关羽",
-      2: "比干",
-      3: "赵公明",
-      4: "柴荣",
-      5: "王亥",
-      6: "五路财神"
+      1: "西路财神卡",
+      2: "东路财神卡",
+      3: "北路财神卡",
+      4: "南路财神卡",
+      5: "中路财神卡",
+      6: "五路财神卡"
     };
 
     const CARD_IMAGES = {
@@ -581,7 +581,7 @@
 
         const cardName = CARD_NAMES[data.card_id] || ("卡 " + data.card_id);
         const imgUrl = CARD_IMAGES[data.card_id] || "";
-        let firstText = `恭喜获得【${cardName}】财神卡！`;
+        let firstText = `恭喜获得${cardName}！`;
 
         // 本次抽到的卡彈窗
         modalQueue.length = 0;
@@ -595,7 +595,7 @@
         if (data.bonus_card6) {
           const card6Name = CARD_NAMES[6];
           const card6Img = CARD_IMAGES[6] || "";
-          const bonusText = `恭喜获得【${card6Name}】财神卡！<br/><br/>恭喜{{ name }}解锁五路财神卡，一路发发发！`;
+          const bonusText = `恭喜获得${card6Name}！<br/><br/>恭喜{{ name }}解锁五路财神卡，一路发发发！`;
           modalQueue.push({
             title: "抽卡結果",
             text: bonusText,

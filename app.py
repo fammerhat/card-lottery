@@ -573,7 +573,21 @@ def landing_page():
         print(f"查询已审核图片失败: {exc}")
         approved_images = []
     
-    return render_template("landing.html", approved_images=approved_images)
+    approved_gallery_data = [
+        {
+            "id": item.id,
+            "thumbnail_url": item.thumbnail_url or "",
+            "dream_image_url": item.dream_image_url or "",
+            "user_name": item.user_name or "匿名用户",
+        }
+        for item in approved_images
+    ]
+    
+    return render_template(
+        "landing.html",
+        approved_images=approved_images,
+        approved_gallery_data=approved_gallery_data,
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])

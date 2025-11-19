@@ -450,7 +450,7 @@
         <button class="recommend-btn" id="usePrompt">使用推荐口令</button>
       </div>
       <div class="dialog-input">
-        <label class="upload-btn" id="uploadTrigger">🖼️</label>
+        <label class="upload-btn" id="uploadTrigger">上传图片</label>
         <div class="upload-preview" id="uploadPreview" style="display:none;"></div>
         <input type="file" accept="image/*" id="uploadInput" hidden />
         <textarea id="promptInput" placeholder="输入你的口令或使用推荐口令" rows="1"></textarea>
@@ -459,17 +459,12 @@
     </div>
   </div>
 
+  <script type="application/json" id="initialGalleryData">{{ approved_gallery_data|tojson|safe }}</script>
+
   <script>
-    const initialGallery = [
-      {% for item in approved_images %}
-      {
-        "id": {{ item.id }},
-        "thumbnail_url": {{ (item.thumbnail_url or "")|tojson }},
-        "dream_image_url": {{ (item.dream_image_url or "")|tojson }},
-        "user_name": {{ (item.user_name or "匿名用户")|tojson }}
-      }{% if not loop.last %},{% endif %}
-      {% endfor %}
-    ];
+    /* eslint-disable */
+    const initialGalleryEl = document.getElementById("initialGalleryData");
+    const initialGallery = initialGalleryEl ? JSON.parse(initialGalleryEl.textContent || "[]") : [];
     const openGeneratorBtn = document.getElementById("openGenerator");
     const dialogOverlay = document.getElementById("generatorDialog");
     const dialogClose = document.getElementById("dialogClose");
@@ -486,6 +481,9 @@
     const RECOMMENDED_PROMPT = "帮我生成图片：用这张图片的脸生成一张Q版财神手办，材质为：黏土或羊毛毡或毛线，随机。财神穿汉服，戴帽子，可以有胡子，形象可以参考五路财神（比干、柴荣、关羽、赵公明、王亥，随机）。整体是喜庆风格，暖色调，背景有一些新年元素。有立体感，有光泽度，手办为全身完整，且有底座，手办的脸部特征要和原图的脸部高度相似，性别相同。一张正方形比例图片。";
 
     let selectedFile = null;
+    let lastFile = null;
+    let lastPrompt = "";
+    let lastPreviewUrl = "";
     let galleryImages = [];
     let galleryIndex = 0;
     let galleryTimer = null;
@@ -521,10 +519,12 @@
     uploadInput.addEventListener("change", () => {
       if (uploadInput.files && uploadInput.files[0]) {
         selectedFile = uploadInput.files[0];
+        lastFile = selectedFile;
         const reader = new FileReader();
         reader.onload = (e) => {
           uploadPreview.style.display = "block";
           uploadPreview.style.backgroundImage = `url(${e.target.result})`;
+          lastPreviewUrl = e.target.result;
         };
         reader.readAsDataURL(selectedFile);
       }
@@ -532,10 +532,9 @@
     });
 
     function validateSendButton() {
-      // 按钮始终可用，点击时会在 sendGenerate 中检查并显示提示
-      // 这里可以添加视觉反馈，比如改变按钮样式
-      const hasImage = !!selectedFile;
-      const hasPrompt = !!promptInput.value.trim();
+      // 按钮视觉反馈：若已有上传记录或历史记录则高亮
+      const hasImage = !!(selectedFile || lastFile);
+      const hasPrompt = !!(promptInput.value.trim() || lastPrompt);
       
       if (hasImage && hasPrompt) {
         sendBtn.style.opacity = "1";
@@ -630,12 +629,24 @@
     ensureChatPlaceholder();
     validateSendButton(); // 初始化按钮状态
 
+    function getCurrentPreviewUrl() {
+      let previewUrl = uploadPreview.style.backgroundImage || "";
+      if (previewUrl.startsWith("url(")) {
+        previewUrl = previewUrl.replace(/^url\(["']?/, "").replace(/["']?\)$/, "");
+      } else {
+        previewUrl = "";
+      }
+      if (!previewUrl && lastPreviewUrl) {
+        previewUrl = lastPreviewUrl;
+      }
+      return previewUrl;
+    }
+
     async function sendGenerate(isRetry = false) {
-      // 检查是否同时有图片和文字口令
-      const hasImage = !!selectedFile;
-      const hasPrompt = !!promptInput.value.trim();
+      const promptText = promptInput.value.trim() || lastPrompt;
+      const fileToUse = selectedFile || lastFile;
       
-      if (!hasImage && !hasPrompt) {
+      if (!fileToUse && !promptText) {
         appendMessage({
           type: "system",
           label: "提示",
@@ -644,7 +655,7 @@
         return;
       }
       
-      if (!hasImage) {
+      if (!fileToUse) {
         appendMessage({
           type: "system",
           label: "提示",
@@ -653,7 +664,7 @@
         return;
       }
       
-      if (!hasPrompt) {
+      if (!promptText) {
         appendMessage({
           type: "system",
           label: "提示",
@@ -669,18 +680,13 @@
 
       clearPlaceholder();
 
-      let previewUrl = uploadPreview.style.backgroundImage || "";
-      if (previewUrl.startsWith("url(")) {
-        previewUrl = previewUrl.replace(/^url\(["']?/, "").replace(/["']?\)$/, "");
-      } else {
-        previewUrl = "";
-      }
+      const previewUrl = getCurrentPreviewUrl();
 
       appendMessage({
         type: "user",
         label: isRetry ? "重新生成" : "我的口令",
-        text: promptInput.value.trim(),
-        imageUrl: previewUrl || null,
+        text: promptText,
+        imageUrl: previewUrl || lastPreviewUrl || null,
       });
 
       const statusMsg = appendMessage({
@@ -691,8 +697,8 @@
       const progress = startProgress(statusMsg);
 
       const formData = new FormData();
-      formData.append("prompt", promptInput.value.trim());
-      formData.append("image", selectedFile);
+      formData.append("prompt", promptText);
+      formData.append("image", fileToUse);
 
       try {
         const resp = await fetch("/api/generate-figure", {
@@ -709,6 +715,9 @@
           });
         } else {
           progress.finish(true);
+          lastPrompt = promptText;
+          lastFile = fileToUse;
+          lastPreviewUrl = previewUrl;
           const resultMsg = appendMessage({
             type: "ai",
             label: "财神助手",
