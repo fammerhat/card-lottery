@@ -93,6 +93,68 @@
       font-size: 17px;
       font-weight: 700;
     }
+    .team-rank-section {
+      margin-top: 12px;
+      margin-bottom: 12px;
+      background: rgba(15, 23, 42, 0.96);
+      border-radius: 18px;
+      padding: 14px 12px;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+    .team-rank-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .team-rank-item {
+      margin-bottom: 10px;
+    }
+    .team-rank-item:last-child {
+      margin-bottom: 0;
+    }
+    .team-rank-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .team-rank-row .team-rank-item {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .team-rank-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .team-rank-value {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .team-rank-value.rank {
+      color: var(--accent);
+      font-size: 18px;
+    }
+    .team-rank-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+    .rank-improvement-notice {
+      background: rgba(251, 191, 36, 0.15);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--accent);
+      text-align: center;
+    }
     .draw-area {
       margin-top: 4px;
       background: rgba(15, 23, 42, 0.96);
@@ -274,6 +336,53 @@
           <div class="stat-value" id="consumedValue">{{ consumed }}</div>
         </div>
       </div>
+
+      {% if team_info %}
+      <div class="team-rank-section" id="teamRankSection">
+        <div class="team-rank-title">我的战队</div>
+        
+        <div class="team-rank-row">
+          <div class="team-rank-item">
+            <div class="team-rank-label">战队</div>
+            <div class="team-rank-value" id="teamName">{{ team_info.team_name }}</div>
+          </div>
+          
+          <div class="team-rank-item">
+            <div class="team-rank-label">战队排名</div>
+            <div class="team-rank-value rank" id="teamRank">{{ team_info.rank }}</div>
+          </div>
+        </div>
+        
+        {% if team_info.rank > 1 %}
+        <div class="team-rank-item">
+          <div class="team-rank-label">距离超越前1名还需要</div>
+          <div class="team-rank-value" id="cardsToCatchUp">{{ team_info.cards_to_catch_up }}张财神卡</div>
+        </div>
+        {% endif %}
+        
+        <div class="team-rank-row">
+          <div class="team-rank-item">
+            <div class="team-rank-label">战队财神卡</div>
+            <div class="team-rank-value" id="teamTotalCards">共集齐{{ team_info.total_cards }}张</div>
+          </div>
+          
+          <div class="team-rank-item">
+            <div class="team-rank-label">抽卡次数</div>
+            <div class="team-rank-value" id="teamTotalDraws">{{ team_info.total_draws }}</div>
+          </div>
+        </div>
+        
+        {% if rank_improvement and rank_improvement > 0 %}
+        <div class="rank-improvement-notice" id="rankImprovementNotice">
+          你的战队今天前进了{{ rank_improvement }}名
+        </div>
+        {% endif %}
+        
+        <div class="team-rank-hint">
+          每个整点根据战队财神卡数量更新排名，每天下午6点结算当日排名，当日排名前进1名以上有额外奖励。
+        </div>
+      </div>
+      {% endif %}
 
       <div class="draw-area">
         <div class="draw-desc">
@@ -523,6 +632,81 @@
     // 从后端拿到历史已拥有卡（Jinja 注入），一进页面就渲染 6 个框
     const initialOwned = {{ owned_cards|tojson }};
     renderOwnedGrid(initialOwned);
+
+    // 战队排名刷新逻辑
+    {% if team_info %}
+    const teamRankSection = document.getElementById("teamRankSection");
+    if (teamRankSection) {
+      function updateTeamRank() {
+        fetch("/api/team-rank")
+          .then((resp) => resp.json())
+          .then((data) => {
+            if (data.success && data.team_info) {
+              const info = data.team_info;
+              
+              // 更新排名信息
+              const teamRankEl = document.getElementById("teamRank");
+              const teamTotalCardsEl = document.getElementById("teamTotalCards");
+              const teamTotalDrawsEl = document.getElementById("teamTotalDraws");
+              const cardsToCatchUpEl = document.getElementById("cardsToCatchUp");
+              
+              if (teamRankEl) teamRankEl.textContent = info.rank;
+              if (teamTotalCardsEl) teamTotalCardsEl.textContent = `共集齐${info.total_cards}张`;
+              if (teamTotalDrawsEl) teamTotalDrawsEl.textContent = info.total_draws;
+              
+              // 更新距离前一名需要的卡数
+              if (info.rank > 1) {
+                if (cardsToCatchUpEl) {
+                  cardsToCatchUpEl.textContent = `${info.cards_to_catch_up}张财神卡`;
+                  cardsToCatchUpEl.parentElement.style.display = "block";
+                }
+              } else {
+                if (cardsToCatchUpEl) {
+                  cardsToCatchUpEl.parentElement.style.display = "none";
+                }
+              }
+              
+              // 显示排名提升提示
+              if (data.rank_improvement && data.rank_improvement > 0) {
+                let noticeEl = document.getElementById("rankImprovementNotice");
+                if (!noticeEl) {
+                  noticeEl = document.createElement("div");
+                  noticeEl.id = "rankImprovementNotice";
+                  noticeEl.className = "rank-improvement-notice";
+                  const hintEl = teamRankSection.querySelector(".team-rank-hint");
+                  if (hintEl) {
+                    teamRankSection.insertBefore(noticeEl, hintEl);
+                  }
+                }
+                noticeEl.textContent = `你的战队今天前进了${data.rank_improvement}名`;
+                noticeEl.style.display = "block";
+              }
+            }
+          })
+          .catch((err) => {
+            console.error("更新战队排名失败:", err);
+          });
+      }
+      
+      // 立即更新一次
+      updateTeamRank();
+      
+      // 计算到下一个整点的毫秒数
+      function getMsToNextHour() {
+        const now = new Date();
+        const nextHour = new Date(now);
+        nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+        return nextHour.getTime() - now.getTime();
+      }
+      
+      // 设置定时器，在下一个整点刷新
+      setTimeout(() => {
+        updateTeamRank();
+        // 之后每小时刷新一次
+        setInterval(updateTeamRank, 60 * 60 * 1000);
+      }, getMsToNextHour());
+    }
+    {% endif %}
   </script>
 </body>
 </html>

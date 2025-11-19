@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time, date
 from io import StringIO, BytesIO
 import csv
 import os
@@ -140,7 +140,169 @@ class GenerateRecord(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class TeamRankSnapshot(db.Model):
+    """战队排名历史快照"""
+    id = db.Column(db.Integer, primary_key=True)
+    team_name = db.Column(db.String(50), nullable=False)
+    rank = db.Column(db.Integer, nullable=False)  # 排名
+    total_cards = db.Column(db.Integer, default=0, nullable=False)  # 战队财神卡总数
+    total_draws = db.Column(db.Integer, default=0, nullable=False)  # 战队抽卡次数
+    snapshot_time = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)  # 快照时间
+    snapshot_date = db.Column(db.Date, nullable=False)  # 快照日期（用于每日对比）
+
+
 # --- 小工具 ---
+
+def calculate_team_stats():
+    """计算所有战队的统计数据"""
+    teams = {}
+    
+    # 遍历所有用户
+    for user in User.query.all():
+        if not user.team:
+            continue
+            
+        team_name = user.team
+        if team_name not in teams:
+            teams[team_name] = {
+                "total_cards": set(),  # 使用set去重
+                "total_draws": 0,
+            }
+        
+        # 统计该用户集齐的卡种类（去重）
+        user_cards = set([uc.card_id for uc in user.cards])
+        teams[team_name]["total_cards"].update(user_cards)
+        
+        # 累加抽卡次数
+        teams[team_name]["total_draws"] += user.consumed_draws
+    
+    # 转换为卡数量
+    for team_name in teams:
+        teams[team_name]["total_cards"] = len(teams[team_name]["total_cards"])
+    
+    return teams
+
+
+def calculate_team_rankings():
+    """计算战队排名，返回排序后的列表"""
+    teams = calculate_team_stats()
+    
+    # 转换为列表并排序：先按卡数量降序，再按抽卡次数降序
+    team_list = [
+        {
+            "team_name": name,
+            "total_cards": data["total_cards"],
+            "total_draws": data["total_draws"],
+        }
+        for name, data in teams.items()
+    ]
+    
+    # 排序：卡数量降序，相同则抽卡次数降序
+    team_list.sort(key=lambda x: (x["total_cards"], x["total_draws"]), reverse=True)
+    
+    # 添加排名
+    for idx, team in enumerate(team_list, 1):
+        team["rank"] = idx
+    
+    return team_list
+
+
+def get_team_rank_info(team_name):
+    """获取指定战队的排名信息"""
+    if not team_name:
+        return None
+    
+    rankings = calculate_team_rankings()
+    
+    # 找到当前战队
+    current_team = None
+    for team in rankings:
+        if team["team_name"] == team_name:
+            current_team = team
+            break
+    
+    if not current_team:
+        return None
+    
+    # 计算距离前一名需要的卡数
+    cards_to_catch_up = 0
+    if current_team["rank"] > 1:
+        # 找到前一名
+        prev_team = rankings[current_team["rank"] - 2]
+        cards_to_catch_up = prev_team["total_cards"] - current_team["total_cards"]
+        if cards_to_catch_up < 0:
+            cards_to_catch_up = 0
+    
+    return {
+        "team_name": current_team["team_name"],
+        "rank": current_team["rank"],
+        "total_cards": current_team["total_cards"],
+        "total_draws": current_team["total_draws"],
+        "cards_to_catch_up": cards_to_catch_up,
+    }
+
+
+def save_team_rank_snapshot():
+    """保存战队排名快照（每小时整点调用）"""
+    rankings = calculate_team_rankings()
+    snapshot_date = datetime.utcnow().date()
+    snapshot_time = datetime.utcnow()
+    
+    for team in rankings:
+        snapshot = TeamRankSnapshot(
+            team_name=team["team_name"],
+            rank=team["rank"],
+            total_cards=team["total_cards"],
+            total_draws=team["total_draws"],
+            snapshot_time=snapshot_time,
+            snapshot_date=snapshot_date,
+        )
+        db.session.add(snapshot)
+    
+    db.session.commit()
+
+
+def check_team_rank_improvement(team_name):
+    """检查战队排名是否提升（对比昨日18点的快照）"""
+    if not team_name:
+        return None
+    
+    today = datetime.utcnow().date()
+    yesterday = today - timedelta(days=1)
+    
+    # 获取今日18点的最新排名
+    today_18h = datetime.combine(today, time(18, 0, 0))
+    today_snapshot = (
+        TeamRankSnapshot.query.filter(
+            TeamRankSnapshot.team_name == team_name,
+            TeamRankSnapshot.snapshot_date == today,
+            TeamRankSnapshot.snapshot_time >= today_18h,
+        )
+        .order_by(TeamRankSnapshot.snapshot_time.desc())
+        .first()
+    )
+    
+    # 获取昨日18点的排名
+    yesterday_18h = datetime.combine(yesterday, time(18, 0, 0))
+    yesterday_snapshot = (
+        TeamRankSnapshot.query.filter(
+            TeamRankSnapshot.team_name == team_name,
+            TeamRankSnapshot.snapshot_date == yesterday,
+            TeamRankSnapshot.snapshot_time >= yesterday_18h,
+        )
+        .order_by(TeamRankSnapshot.snapshot_time.desc())
+        .first()
+    )
+    
+    if not today_snapshot or not yesterday_snapshot:
+        return None
+    
+    rank_improvement = yesterday_snapshot.rank - today_snapshot.rank
+    if rank_improvement > 0:
+        return rank_improvement
+    
+    return None
+
 
 def get_device_identifier():
     ip = request.remote_addr or "unknown_ip"
@@ -395,9 +557,13 @@ def create_thumbnail(source_rel_path, max_kb=120, max_size=(512, 512)):
 @app.route("/")
 def landing_page():
     """活动入口页"""
+    # 使用更兼容的排序方式
     approved_images = (
         GenerateRecord.query.filter(GenerateRecord.status == "approved")
-        .order_by(GenerateRecord.approved_at.desc().nullslast(), GenerateRecord.created_at.desc())
+        .order_by(
+            func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at).desc(),
+            GenerateRecord.created_at.desc()
+        )
         .limit(10)
         .all()
     )
@@ -520,6 +686,16 @@ def draw_page():
         return redirect(url_for("user_login_page"))
 
     owned_cards = [uc.card_id for uc in user.cards]
+    
+    # 获取战队排名信息
+    team_info = get_team_rank_info(user.team) if user.team else None
+    
+    # 检查排名提升（如果是18点后）
+    rank_improvement = None
+    if user.team:
+        current_hour = datetime.utcnow().hour
+        if current_hour >= 18:
+            rank_improvement = check_team_rank_improvement(user.team)
 
     return render_template(
         "draw.html",
@@ -527,6 +703,8 @@ def draw_page():
         remaining=user.remaining_draws,
         consumed=user.consumed_draws,
         owned_cards=owned_cards,
+        team_info=team_info,
+        rank_improvement=rank_improvement,
     )
 
 
@@ -614,6 +792,49 @@ def api_draw():
             "remaining": user.remaining_draws,
             "consumed": user.consumed_draws,
             "owned_cards": owned_cards_sorted,
+        }
+    )
+
+
+@app.route("/api/team-rank", methods=["GET"])
+def api_team_rank():
+    """获取战队排名信息（用于前端定时刷新）"""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "NOT_LOGIN"}), 401
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "USER_NOT_FOUND"}), 404
+
+    if not user.team:
+        return jsonify({"success": False, "error": "NO_TEAM"}), 400
+
+    # 检查是否是整点，如果是则保存快照
+    current_time = datetime.utcnow()
+    if current_time.minute == 0:
+        try:
+            save_team_rank_snapshot()
+        except Exception:
+            pass  # 如果保存失败，继续返回排名信息
+
+    # 获取战队排名信息
+    team_info = get_team_rank_info(user.team)
+    
+    # 检查排名提升（如果是18点后）
+    rank_improvement = None
+    current_hour = current_time.hour
+    if current_hour >= 18:
+        rank_improvement = check_team_rank_improvement(user.team)
+
+    if not team_info:
+        return jsonify({"success": False, "error": "TEAM_NOT_FOUND"}), 404
+
+    return jsonify(
+        {
+            "success": True,
+            "team_info": team_info,
+            "rank_improvement": rank_improvement,
         }
     )
 

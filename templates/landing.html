@@ -464,7 +464,7 @@
       {% for item in approved_images %}
       {
         "id": {{ item.id }},
-        "thumbnail_url": {{ item.thumbnail_url|tojson }},
+        "thumbnail_url": {{ (item.thumbnail_url or "")|tojson }},
         "dream_image_url": {{ (item.dream_image_url or "")|tojson }},
         "user_name": {{ (item.user_name or "匿名用户")|tojson }}
       }{% if not loop.last %},{% endif %}
