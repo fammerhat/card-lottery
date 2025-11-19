@@ -526,7 +526,6 @@
     uploadInput.addEventListener("change", () => {
       if (uploadInput.files && uploadInput.files[0]) {
         selectedFile = uploadInput.files[0];
-        lastFile = selectedFile;
         const reader = new FileReader();
         reader.onload = (e) => {
           uploadPreview.style.display = "block";
@@ -539,17 +538,12 @@
     });
 
     function validateSendButton() {
-      // 按钮视觉反馈：若已有上传记录或历史记录则高亮
-      const hasImage = !!(selectedFile || lastFile);
-      const hasPrompt = !!(promptInput.value.trim() || lastPrompt);
-      
-      if (hasImage && hasPrompt) {
-        sendBtn.style.opacity = "1";
-        sendBtn.style.cursor = "pointer";
-      } else {
-        sendBtn.style.opacity = "0.6";
-        sendBtn.style.cursor = "pointer";
-      }
+      const hasImage = !!selectedFile;
+      const hasPrompt = !!promptInput.value.trim();
+      const enabled = hasImage && hasPrompt;
+      sendBtn.disabled = !enabled;
+      sendBtn.style.opacity = enabled ? "1" : "0.6";
+      sendBtn.style.cursor = enabled ? "pointer" : "not-allowed";
     }
     promptInput.addEventListener("input", () => {
       autoResizeTextarea();
@@ -631,6 +625,16 @@
     function clearPlaceholder() {
       const placeholder = chatMessages.querySelector(".placeholder");
       if (placeholder) placeholder.remove();
+    }
+
+    function resetGenerateInputs() {
+      selectedFile = null;
+      uploadInput.value = "";
+      uploadPreview.style.display = "none";
+      uploadPreview.style.backgroundImage = "";
+      promptInput.value = "";
+      autoResizeTextarea();
+      validateSendButton();
     }
 
     ensureChatPlaceholder();
@@ -746,13 +750,6 @@
               },
             ],
           });
-          // 清空输入和图片
-          promptInput.value = "";
-          selectedFile = null;
-          uploadPreview.style.display = "none";
-          uploadInput.value = "";
-          autoResizeTextarea();
-          validateSendButton();
           // 滚动到生成结果
           setTimeout(() => {
             resultMsg.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -767,7 +764,10 @@
           text: "网络异常，请稍后重试。",
         });
       } finally {
-        validateSendButton(); // 恢复按钮状态
+        resetGenerateInputs();
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = "0.6";
+        sendBtn.style.cursor = "not-allowed";
       }
     }
 
