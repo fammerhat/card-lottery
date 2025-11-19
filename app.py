@@ -405,20 +405,23 @@ def generate_volcengine_signature(
     # 必须包含的header
     host_lower = host.strip().lower()
     canonical_headers_map["host"] = host_lower
-    canonical_headers_map["x-content-sha256"] = headers.get("X-Content-Sha256", payload_hash)
-    canonical_headers_map["x-date"] = x_date
+    # header 值需要去除首尾空格，多个连续空格压缩为一个
+    x_content_sha256 = headers.get("X-Content-Sha256", payload_hash).strip()
+    canonical_headers_map["x-content-sha256"] = " ".join(x_content_sha256.split())
+    x_date_value = x_date.strip()
+    canonical_headers_map["x-date"] = " ".join(x_date_value.split())
     
     # Content-Type 也需要参与签名（如果存在）
     content_type = headers.get("Content-Type", "").strip()
     if content_type:
-        canonical_headers_map["content-type"] = content_type
+        canonical_headers_map["content-type"] = " ".join(content_type.split())
     
     # 处理其他需要签名的header（如果有）
     for key, value in headers.items():
         lower_key = key.strip().lower()
         if lower_key not in ("host", "x-content-sha256", "x-date", "content-type"):
-            # 只添加需要签名的header
-            canonical_headers_map[lower_key] = value.strip()
+            # header 值需要去除首尾空格，多个连续空格压缩为一个
+            canonical_headers_map[lower_key] = " ".join(str(value).strip().split())
 
     # 按key排序
     sorted_headers = sorted(canonical_headers_map.items())
@@ -443,11 +446,16 @@ def generate_volcengine_signature(
     def _sign(key_bytes, msg):
         return hmac.new(key_bytes, msg.encode("utf-8"), hashlib.sha256).digest()
 
-    # 修复：根据火山引擎官方文档，Secret Key 应该直接使用，不进行 base64 解码
-    # 即使 Secret Key 看起来像 base64（以 == 结尾），也应该直接使用原始字符串
-    # 参考：https://www.volcengine.com/docs/85621/1747301
-    k_secret = secret_key.encode("utf-8")
-    print(f"[DEBUG] Secret Key used directly (not base64 decoded), length: {len(k_secret)}")
+    # 修复：Secret Key 处理 - 火山引擎的 Secret Key 通常是 base64 编码的，需要先解码
+    # 如果解码失败，则使用原始字符串（向后兼容）
+    try:
+        # 尝试 base64 解码
+        k_secret = base64.b64decode(secret_key)
+        print(f"[DEBUG] Secret Key decoded from base64, length: {len(k_secret)}")
+    except Exception as e:
+        # 如果解码失败，直接使用原始字符串
+        print(f"[DEBUG] Secret Key base64 decode failed: {e}, using raw string")
+        k_secret = secret_key.encode("utf-8")
     k_date = _sign(k_secret, date_stamp)
     k_region = _sign(k_date, region)
     k_service = _sign(k_region, service)
@@ -1086,19 +1094,57 @@ def api_generate_figure():
         return jsonify({"success": False, "error": "IMAGE_PROCESS_FAIL", "detail": str(exc)}), 500
 
     # 調用即夢AI生成圖片（只生成一個結果，節省用量）
-    dream_rel = call_jimeng_api(original_rel, prompt)
-    thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
+    try:
+        dream_rel = call_jimeng_api(original_rel, prompt)
+    except RuntimeError as e:
+        error_msg = str(e)
+        # 如果是签名错误，返回更详细的错误信息
+        if "SignatureDoesNotMatch" in error_msg or "401" in error_msg:
+            return jsonify({
+                "success": False,
+                "error": "API_SIGNATURE_ERROR",
+                "message": "API签名验证失败，请检查配置。"
+            }), 500
+        # 其他运行时错误
+        return jsonify({
+            "success": False,
+            "error": "API_CALL_FAILED",
+            "message": f"API调用失败: {error_msg}"
+        }), 500
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "error": "API_ERROR",
+            "message": f"生成图片时发生错误: {str(exc)}"
+        }), 500
+    
+    try:
+        thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
+    except Exception as exc:
+        return jsonify({
+            "success": False,
+            "error": "THUMBNAIL_FAIL",
+            "message": f"创建缩略图失败: {str(exc)}"
+        }), 500
 
-    record = GenerateRecord(
-        user_name=user_name or None,
-        prompt=prompt,
-        original_image_url=original_rel,
-        thumbnail_url=thumbnail_rel,
-        dream_image_url=dream_rel,
-        status="pending",
-    )
-    db.session.add(record)
-    db.session.commit()
+    try:
+        record = GenerateRecord(
+            user_name=user_name or None,
+            prompt=prompt,
+            original_image_url=original_rel,
+            thumbnail_url=thumbnail_rel,
+            dream_image_url=dream_rel,
+            status="pending",
+        )
+        db.session.add(record)
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "error": "DB_ERROR",
+            "message": f"保存记录失败: {str(exc)}"
+        }), 500
 
     return jsonify(
         {
