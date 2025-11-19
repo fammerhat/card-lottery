@@ -125,6 +125,19 @@
       flex: 1;
       margin-bottom: 0;
     }
+    .team-rank-diff {
+      margin-bottom: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      text-align: center;
+    }
+    .team-rank-diff .rank-number {
+      font-size: 18px;
+      color: var(--accent);
+      font-weight: 800;
+      padding: 0 4px;
+    }
     .team-rank-label {
       font-size: 11px;
       color: var(--text-muted);
@@ -353,12 +366,9 @@
           </div>
         </div>
         
-        {% if team_info.rank > 1 %}
-        <div class="team-rank-item">
-          <div class="team-rank-label">距离超越前1名还需要</div>
-          <div class="team-rank-value" id="cardsToCatchUp">{{ team_info.cards_to_catch_up }}张财神卡</div>
+        <div class="team-rank-diff" id="cardsToCatchUpWrapper" style="display:{% if team_info.rank > 1 %}block{% else %}none{% endif %};">
+          比前1名少<span class="rank-number" id="cardsToCatchUp">{% if team_info.rank > 1 %}{{ team_info.cards_to_catch_up }}{% else %}0{% endif %}</span>张财神卡
         </div>
-        {% endif %}
         
         <div class="team-rank-row">
           <div class="team-rank-item">
@@ -645,24 +655,23 @@
               const info = data.team_info;
               
               // 更新排名信息
-              const teamRankEl = document.getElementById("teamRank");
-              const teamTotalCardsEl = document.getElementById("teamTotalCards");
-              const teamTotalDrawsEl = document.getElementById("teamTotalDraws");
-              const cardsToCatchUpEl = document.getElementById("cardsToCatchUp");
+          const teamRankEl = document.getElementById("teamRank");
+          const teamTotalCardsEl = document.getElementById("teamTotalCards");
+          const teamTotalDrawsEl = document.getElementById("teamTotalDraws");
+          const cardsToCatchUpEl = document.getElementById("cardsToCatchUp");
+          const cardsToCatchUpWrapper = document.getElementById("cardsToCatchUpWrapper");
               
               if (teamRankEl) teamRankEl.textContent = info.rank;
               if (teamTotalCardsEl) teamTotalCardsEl.textContent = `共集齐${info.total_cards}张`;
               if (teamTotalDrawsEl) teamTotalDrawsEl.textContent = info.total_draws;
               
               // 更新距离前一名需要的卡数
-              if (info.rank > 1) {
-                if (cardsToCatchUpEl) {
-                  cardsToCatchUpEl.textContent = `${info.cards_to_catch_up}张财神卡`;
-                  cardsToCatchUpEl.parentElement.style.display = "block";
-                }
-              } else {
-                if (cardsToCatchUpEl) {
-                  cardsToCatchUpEl.parentElement.style.display = "none";
+              if (cardsToCatchUpWrapper && cardsToCatchUpEl) {
+                if (info.rank > 1) {
+                  cardsToCatchUpWrapper.style.display = "block";
+                  cardsToCatchUpEl.textContent = info.cards_to_catch_up;
+                } else {
+                  cardsToCatchUpWrapper.style.display = "none";
                 }
               }
               
