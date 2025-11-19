@@ -65,7 +65,7 @@ JIMENG_SECRET_KEY = os.getenv("JIMENG_SECRET_KEY", "")  # SK - 从环境变量�
 JIMENG_SERVICE = os.getenv("JIMENG_SERVICE", "cv")  # 服务名
 JIMENG_REGION = os.getenv("JIMENG_REGION", "cn-north-1")  # 区域
 JIMENG_ACTION = os.getenv("JIMENG_ACTION", "GenerateImage")
-JIMENG_VERSION = os.getenv("JIMENG_VERSION")
+JIMENG_VERSION = os.getenv("JIMENG_VERSION", "2023-11-01")
 JIMENG_ALLOW_FALLBACK = os.getenv("JIMENG_ALLOW_FALLBACK", "false").lower() == "true"
 
 
