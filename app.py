@@ -399,23 +399,28 @@ def generate_volcengine_signature(
     x_date = headers.get("X-Date", datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"))
     payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    canonical_headers_map = {
-        "host": host.strip().lower(),
-        "x-content-sha256": headers.get("X-Content-Sha256", payload_hash),
-        "x-date": x_date,
-    }
-
+    # 构建canonical headers，只包含需要签名的header
+    canonical_headers_map = {}
+    
+    # 必须包含的header
+    host_lower = host.strip().lower()
+    canonical_headers_map["host"] = host_lower
+    canonical_headers_map["x-content-sha256"] = headers.get("X-Content-Sha256", payload_hash)
+    canonical_headers_map["x-date"] = x_date
+    
+    # 处理其他需要签名的header（如果有）
     for key, value in headers.items():
         lower_key = key.strip().lower()
-        if lower_key in canonical_headers_map:
-            canonical_headers_map[lower_key] = value.strip()
-        else:
+        if lower_key not in ("host", "x-content-sha256", "x-date", "content-type"):
+            # 只添加需要签名的header，Content-Type通常不参与签名
             canonical_headers_map[lower_key] = value.strip()
 
+    # 按key排序
     sorted_headers = sorted(canonical_headers_map.items())
     canonical_headers = "".join(f"{k}:{v}\n" for k, v in sorted_headers)
     signed_headers = ";".join(k for k, _ in sorted_headers)
 
+    # 构建canonical request
     canonical_request = (
         f"{method}\n"
         f"{path}\n"
@@ -433,7 +438,8 @@ def generate_volcengine_signature(
     def _sign(key_bytes, msg):
         return hmac.new(key_bytes, msg.encode("utf-8"), hashlib.sha256).digest()
 
-    k_secret = ("HMAC-SHA256" + secret_key).encode("utf-8")
+    # 修复：直接使用secret_key，不要加"HMAC-SHA256"前缀
+    k_secret = secret_key.encode("utf-8")
     k_date = _sign(k_secret, date_stamp)
     k_region = _sign(k_date, region)
     k_service = _sign(k_region, service)
@@ -501,7 +507,7 @@ def _jimeng_make_request(action, payload_dict):
             "Authorization": authorization,
             "X-Date": x_date,
             "X-Content-Sha256": payload_hash,
-            "Host": host,
+            # 注意：不要手动设置 Host header，requests 会自动处理
         }
     )
 
@@ -509,6 +515,12 @@ def _jimeng_make_request(action, payload_dict):
         url = f"{scheme}://{host}{path}?{query_string}"
     else:
         url = f"{scheme}://{host}{path}"
+
+    # 调试日志（生产环境可移除）
+    print(f"[DEBUG] Request URL: {url}")
+    print(f"[DEBUG] Path: {path}")
+    print(f"[DEBUG] Query: {query_string}")
+    print(f"[DEBUG] Host: {host}")
 
     response = requests.post(
         url,
