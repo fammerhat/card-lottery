@@ -689,18 +689,25 @@
     });
 
     async function validateSendButton() {
-      const hasImage = !!selectedFile;
-      const hasPrompt = !!promptInput.value.trim();
-      // 检查配额（如果已登录）
-      let hasQuota = true;
+      // 按钮始终可点击，不再根据输入状态禁用
+      // 只在配额用完时禁用
       if (isLoggedIn && quotaHint) {
         const quotaHintText = quotaHint.textContent;
-        hasQuota = !quotaHintText.includes("已用完");
+        const hasQuota = !quotaHintText.includes("已用完");
+        if (!hasQuota) {
+          sendBtn.disabled = true;
+          sendBtn.style.opacity = "0.6";
+          sendBtn.style.cursor = "not-allowed";
+        } else {
+          sendBtn.disabled = false;
+          sendBtn.style.opacity = "1";
+          sendBtn.style.cursor = "pointer";
+        }
+      } else {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = "1";
+        sendBtn.style.cursor = "pointer";
       }
-      const enabled = hasImage && hasPrompt && hasQuota;
-      sendBtn.disabled = !enabled;
-      sendBtn.style.opacity = enabled ? "1" : "0.6";
-      sendBtn.style.cursor = enabled ? "pointer" : "not-allowed";
     }
     promptInput.addEventListener("input", () => {
       autoResizeTextarea();
@@ -820,11 +827,12 @@
       const promptText = promptInput.value.trim() || lastPrompt;
       const fileToUse = selectedFile || lastFile;
       
+      // 检查输入，根据实际情况提示
       if (!fileToUse && !promptText) {
         appendMessage({
           type: "system",
           label: "提示",
-          text: "上传参考图才能生成哦",
+          text: "请上传图片，并输入口令提示词",
         });
         return;
       }
@@ -833,7 +841,7 @@
         appendMessage({
           type: "system",
           label: "提示",
-          text: "上传参考图才能生成哦",
+          text: "请上传图片",
         });
         return;
       }
@@ -842,7 +850,7 @@
         appendMessage({
           type: "system",
           label: "提示",
-          text: "输入口令提示词才能生成哦",
+          text: "请输入口令提示词",
         });
         return;
       }
@@ -925,9 +933,8 @@
         });
       } finally {
         resetGenerateInputs();
-        sendBtn.disabled = true;
-        sendBtn.style.opacity = "0.6";
-        sendBtn.style.cursor = "not-allowed";
+        // 恢复按钮状态（配额检查）
+        validateSendButton();
       }
     }
 
