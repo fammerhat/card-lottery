@@ -6,6 +6,7 @@ import random
 import time as pytime
 import uuid
 import base64
+from collections import Counter
 import requests
 from requests.exceptions import (
     Timeout, ConnectionError, RequestException,
@@ -1371,7 +1372,7 @@ def draw_page():
         session.pop("user_id", None)
         return redirect(url_for("user_login_page"))
 
-    owned_cards = [uc.card_id for uc in user.cards]
+    owned_card_counts = Counter(uc.card_id for uc in user.cards)
     
     # 获取战队排名信息
     team_info = get_team_rank_info(user.team) if user.team else None
@@ -1388,7 +1389,7 @@ def draw_page():
         name=user.name,
         remaining=user.remaining_draws,
         consumed=user.consumed_draws,
-        owned_cards=owned_cards,
+        owned_card_counts=dict(owned_card_counts),
         team_info=team_info,
         rank_improvement=rank_improvement,
     )
@@ -1507,6 +1508,7 @@ def api_draw():
     db.session.commit()
 
     owned_cards_sorted = sorted(owned_ids_after)
+    owned_card_counts = Counter(uc.card_id for uc in user.cards)
 
     return jsonify(
         {
@@ -1517,6 +1519,7 @@ def api_draw():
             "remaining": user.remaining_draws,
             "consumed": user.consumed_draws,
             "owned_cards": owned_cards_sorted,
+            "owned_card_counts": {str(cid): count for cid, count in owned_card_counts.items()},
         }
     )
 

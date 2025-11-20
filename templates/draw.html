@@ -245,6 +245,20 @@
       height: 100%;
       object-fit: cover;
     }
+    .card-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      background: rgba(15, 23, 42, 0.9);
+      color: #fde68a;
+      border: 1px solid rgba(251, 191, 36, 0.6);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      min-width: 28px;
+      text-align: center;
+    }
     /* 抽卡中 Loading 遮罩 */
     #loadingOverlay {
       position: fixed;
@@ -390,7 +404,7 @@
         {% endif %}
         
         <div class="team-rank-hint">
-          若每日排名对比前一日前进 1 名，当日群内每人可瓜分 50 元。
+          每个整点根据战队财神卡数量更新排名（若相同看抽奖次数），每天下午6点结算时，若当日排名前进1名以上，当日群内每人可瓜分50元。
         </div>
       </div>
       {% endif %}
@@ -517,13 +531,14 @@
       loadingOverlay.style.display = show ? "flex" : "none";
     }
 
-    function renderOwnedGrid(ownedIds) {
-      const ownedSet = new Set(ownedIds || []);
+    function renderOwnedGrid(ownedCounts) {
+      const counts = ownedCounts || {};
       cardsContainer.innerHTML = "";
       for (let cid = 1; cid <= TOTAL_CARDS; cid++) {
         const slot = document.createElement("div");
         slot.className = "owned-slot";
-        if (ownedSet.has(cid)) {
+        const count = counts[cid] || counts[String(cid)] || 0;
+        if (count > 0) {
           const img = document.createElement("img");
           const imgUrl = CARD_IMAGES[cid] || "";
           if (imgUrl) {
@@ -531,6 +546,12 @@
           }
           img.alt = "卡 " + cid;
           slot.appendChild(img);
+          if (count > 1) {
+            const badge = document.createElement("div");
+            badge.className = "card-badge";
+            badge.textContent = `x${count}`;
+            slot.appendChild(badge);
+          }
         }
         cardsContainer.appendChild(slot);
       }
@@ -619,7 +640,7 @@
         }
 
         // 更新已拥有卡图片
-        renderOwnedGrid(data.owned_cards || []);
+        renderOwnedGrid(data.owned_card_counts || {});
 
         const cardName = CARD_NAMES[data.card_id] || ("卡 " + data.card_id);
         const imgUrl = CARD_IMAGES[data.card_id] || "";
@@ -676,8 +697,8 @@
     }
 
     // 从后端拿到历史已拥有卡（Jinja 注入），一进页面就渲染 6 个框
-    const initialOwned = {{ owned_cards|tojson }};
-    renderOwnedGrid(initialOwned);
+    const initialOwnedCounts = {{ owned_card_counts|tojson }};
+    renderOwnedGrid(initialOwnedCounts);
 
     // 战队排名刷新逻辑
     {% if team_info %}
