@@ -38,9 +38,42 @@
     }
     .header {
       text-align: center;
-      margin-bottom: 14px;
-      padding-top: 4px;
+      margin-bottom: 24px;
+      padding-top: 10px;
       position: relative;
+    }
+    .login-status {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 12px;
+      color: #cbd5e1;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .login-status .login-name {
+      font-weight: 600;
+      color: #fde68a;
+    }
+    .login-status.not-logged {
+      color: #fbbf24;
+      text-decoration: none;
+    }
+    .login-status.not-logged:hover {
+      text-decoration: underline;
+    }
+    .logout-btn {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: #cbd5e1;
+      text-decoration: none;
+    }
+    .logout-btn:hover {
+      border-color: rgba(251, 191, 36, 0.7);
+      color: #fde68a;
     }
     .login-status {
       position: absolute;
@@ -253,6 +286,13 @@
       background: rgba(30, 41, 59, 0.6);
       border-radius: 12px;
       border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .tips-note {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 18px;
+      text-align: center;
+      line-height: 1.6;
     }
     .tips-section .tip-item {
       font-size: 11px;
@@ -550,13 +590,11 @@
     <div class="header">
       {% if is_logged_in %}
       <div class="login-status logged-in">
-        <span>已登录：</span>
         <span class="login-name">{{ user_name }}</span>
+        <a class="logout-btn" href="{{ url_for('user_logout') }}">退出登录</a>
       </div>
       {% else %}
-      <div class="login-status">
-        <span>未登录</span>
-      </div>
+      <a class="login-status not-logged" href="/login?next=/">未登录</a>
       {% endif %}
       <div class="title">11 月财神赐福狂欢季！</div>
       <div class="subtitle"><span class="money">3 元</span>起领红包，<span class="money">50 元</span>大额奖，多多参与可拿<span class="money">100元</span>以上红包</div>
@@ -610,6 +648,8 @@
         <div class="gallery-track" id="galleryTrack"></div>
       </div>
     </div>
+
+    <div class="tips-note">（本活动由用户运营组运用AI Coding为蛋糕春节活动玩法内核做的模拟测试，首次尝试AI搭建，体验不足请多多反馈指导）</div>
 
     <div class="tips-section">
       <div class="tip-item">1、每日审核1-2次刷新财神卡次数，可以先邀请好友入群，积累一定次数再抽卡，效率更高</div>
