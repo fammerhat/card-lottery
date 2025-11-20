@@ -21,12 +21,15 @@ instance/
 .env
 .env.local
 setup_api_keys.sh
+.env.jimeng
+.cursorindexingignore
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+.specstory/
 
 # OS
 .DS_Store
@@ -37,4 +40,5 @@ Thumbs.db
 
 # Uploads (可选，如果不想提交用户上传的图片)
 # static/uploads/
+static/uploads/
 
