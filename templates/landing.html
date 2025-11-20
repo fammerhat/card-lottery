@@ -261,11 +261,26 @@
       font-weight: 700;
     }
     .dialog-close {
-      background: none;
-      border: none;
-      color: #cbd5e1;
-      font-size: 18px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 2px solid rgba(239, 68, 68, 0.6);
+      border-radius: 50%;
+      color: #fca5a5;
+      font-size: 24px;
+      font-weight: 700;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
+      transition: all 0.2s ease;
+      line-height: 1;
+    }
+    .dialog-close:hover {
+      background: rgba(239, 68, 68, 0.4);
+      border-color: rgba(239, 68, 68, 0.8);
+      color: #f87171;
+      transform: scale(1.1);
     }
     .dialog-body {
       padding: 10px 16px;
@@ -311,6 +326,22 @@
       width: 33%;
       text-align: center;
       margin: 0 auto;
+    }
+    .progress-container {
+      width: 100%;
+      margin-top: 8px;
+    }
+    .progress-bar {
+      height: 8px;
+      background: linear-gradient(90deg, #fbbf24, #fb923c);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      margin-bottom: 6px;
+    }
+    .progress-text {
+      font-size: 11px;
+      color: #cbd5e1;
+      text-align: center;
     }
     .chat-area {
       flex: 1;
@@ -532,7 +563,7 @@
       </div>
       <div class="dialog-recommend">
         <button class="recommend-btn" id="usePrompt">使用推荐口令</button>
-        <div class="quota-hint" id="quotaHint">您今天还有5次生成机会</div>
+        <div class="quota-hint" id="quotaHint">每天有5次生成机会哦！</div>
       </div>
       <div class="dialog-input">
         <label class="upload-btn" id="uploadTrigger">上传图片</label>
@@ -569,10 +600,10 @@
     // 登录状态（从后端传递）
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
     
-    // 获取生成配额
+    // 获取生成配额（仅用于检查是否用完，不显示动态次数）
     async function updateQuota() {
       if (!isLoggedIn) {
-        quotaHint.textContent = "请先登录";
+        quotaHint.textContent = "每天有5次生成机会哦！";
         return;
       }
       try {
@@ -581,7 +612,7 @@
         if (data.success) {
           const remaining = data.remaining;
           if (remaining > 0) {
-            quotaHint.textContent = `您今天还有${remaining}次生成机会`;
+            quotaHint.textContent = "每天有5次生成机会哦！";
             quotaHint.className = "quota-hint";
           } else {
             quotaHint.textContent = "您今天的生成额度已用完，明天再来！";
@@ -593,6 +624,7 @@
         }
       } catch (error) {
         console.error("获取配额失败:", error);
+        quotaHint.textContent = "每天有5次生成机会哦！";
       }
     }
     
@@ -629,7 +661,16 @@
       }
       dialogOverlay.style.display = "flex";
       document.body.style.overflow = "hidden";
-      ensureChatPlaceholder();
+      
+      // 恢复聊天记录
+      const hasHistory = chatMessages.querySelectorAll(".chat-message:not(.placeholder)").length > 0;
+      if (!hasHistory) {
+        restoreChatHistory();
+      }
+      if (chatMessages.querySelectorAll(".chat-message").length === 0) {
+        ensureChatPlaceholder();
+      }
+      
       updateQuota().then(() => {
         validateSendButton();
       });
@@ -714,7 +755,40 @@
       validateSendButton();
     });
 
-    function appendMessage({ type, label, text, imageUrl, actions, showSaveHint }) {
+    // 保存聊天记录到localStorage
+    function saveChatHistory() {
+      const messages = [];
+      chatMessages.querySelectorAll(".chat-message:not(.placeholder)").forEach((msgEl) => {
+        const msgData = {
+          type: msgEl.className.includes("user") ? "user" : 
+                msgEl.className.includes("ai") ? "ai" : "system",
+          label: msgEl.querySelector(".msg-label")?.textContent || "",
+          text: msgEl.querySelector("div:not(.msg-label):not(.save-hint)")?.textContent || "",
+          imageUrl: msgEl.querySelector("img")?.src || "",
+          showSaveHint: !!msgEl.querySelector(".save-hint"),
+        };
+        messages.push(msgData);
+      });
+      localStorage.setItem("generate_chat_history", JSON.stringify(messages));
+    }
+    
+    // 恢复聊天记录
+    function restoreChatHistory() {
+      try {
+        const saved = localStorage.getItem("generate_chat_history");
+        if (saved) {
+          const messages = JSON.parse(saved);
+          messages.forEach((msgData) => {
+            appendMessage(msgData, false); // false表示不保存到localStorage（避免重复）
+          });
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+      } catch (error) {
+        console.error("恢复聊天记录失败:", error);
+      }
+    }
+
+    function appendMessage({ type, label, text, imageUrl, actions, showSaveHint }, saveToStorage = true) {
       const msg = document.createElement("div");
       msg.className = `chat-message ${type}`;
       if (label) {
@@ -753,32 +827,75 @@
       }
       chatMessages.appendChild(msg);
       chatMessages.scrollTop = chatMessages.scrollHeight;
+      
+      // 保存到localStorage（排除进度条消息）
+      if (saveToStorage && !msg.querySelector(".progress-container")) {
+        saveChatHistory();
+      }
+      
       return msg;
     }
 
     function startProgress(messageEl) {
-      const steps = [
-        { value: 30, delay: 500 },
-        { value: 60, delay: 800 },
-        { value: 85, delay: 700 },
-        { value: 95, delay: 500 },
-      ];
+      // 创建进度条容器
+      const progressContainer = document.createElement("div");
+      progressContainer.className = "progress-container";
+      
+      const progressBar = document.createElement("div");
+      progressBar.className = "progress-bar";
+      progressBar.style.width = "0%";
+      
+      const progressText = document.createElement("div");
+      progressText.className = "progress-text";
+      progressText.textContent = "生成中0%，免费服务器，请耐心等待";
+      
+      progressContainer.appendChild(progressBar);
+      progressContainer.appendChild(progressText);
+      messageEl.innerHTML = "";
+      messageEl.appendChild(progressContainer);
+      
+      let currentProgress = 0;
       let timer = null;
-      let index = 0;
-
-      function run() {
-        if (index >= steps.length) return;
-        const step = steps[index];
-        messageEl.textContent = `生成中… ${step.value}%`;
-        index += 1;
-        timer = setTimeout(run, step.delay);
+      
+      // 91%之前快速加载
+      function fastProgress() {
+        if (currentProgress >= 91) {
+          slowProgress();
+          return;
+        }
+        currentProgress += Math.random() * 15 + 5; // 5-20% 随机增长
+        if (currentProgress > 91) currentProgress = 91;
+        
+        progressBar.style.width = currentProgress + "%";
+        progressText.textContent = `生成中${Math.floor(currentProgress)}%，免费服务器，请耐心等待`;
+        
+        timer = setTimeout(fastProgress, 200 + Math.random() * 300); // 200-500ms随机延迟
       }
-      run();
+      
+      // 91%之后缓慢增加到100%
+      function slowProgress() {
+        if (currentProgress >= 100) return;
+        currentProgress += Math.random() * 2 + 0.5; // 0.5-2.5% 缓慢增长
+        if (currentProgress > 100) currentProgress = 100;
+        
+        progressBar.style.width = currentProgress + "%";
+        progressText.textContent = `生成中${Math.floor(currentProgress)}%，免费服务器，请耐心等待`;
+        
+        timer = setTimeout(slowProgress, 500 + Math.random() * 500); // 500-1000ms随机延迟
+      }
+      
+      fastProgress();
 
       return {
         finish(success = true) {
           if (timer) clearTimeout(timer);
-          messageEl.textContent = success ? "生成完成！" : "生成失败，请稍后重试。";
+          if (success) {
+            currentProgress = 100;
+            progressBar.style.width = "100%";
+            progressText.textContent = "生成完成！";
+          } else {
+            progressText.textContent = "生成失败，请稍后重试。";
+          }
         },
       };
     }
@@ -874,8 +991,8 @@
       const statusMsg = appendMessage({
         type: "system",
         label: "系统",
-        text: "生成中… 0%",
-      });
+        text: "",
+      }, false); // 不保存进度条消息到历史记录
       const progress = startProgress(statusMsg);
 
       const formData = new FormData();
