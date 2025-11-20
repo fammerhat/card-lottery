@@ -52,7 +52,7 @@ if database_url:
     print(f"[INFO] 使用 PostgreSQL 数据库")
 else:
     # 本地开发使用 SQLite
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     print(f"[INFO] 使用 SQLite 数据库: {db_path}")
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -62,6 +62,9 @@ app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change_this_to_random_string
 app.permanent_session_lifetime = timedelta(days=7)
 
 db = SQLAlchemy(app)
+
+# 只展示這個時間點之後審核通過的生成結果
+GALLERY_APPROVED_SINCE = datetime.utcnow()
 
 # 圖片儲存路徑
 UPLOAD_BASE = os.path.join(BASE_DIR, "static", "uploads")
@@ -422,7 +425,7 @@ def cleanup_old_chat_messages(user_id=None):
         query = query.filter(GenerateChatMessage.user_id == user_id)
     deleted = query.delete(synchronize_session=False)
     if deleted:
-        db.session.commit()
+    db.session.commit()
 
 
 def save_and_compress_image(file_storage, dest_folder, prefix, max_kb=100, max_size=(800, 800)):
@@ -613,27 +616,27 @@ def _jimeng_make_request(action, payload_dict):
     scheme, host, path = _build_jimeng_request_components()
 
     query_items = [("Action", action)]
-    if JIMENG_VERSION:
-        query_items.append(("Version", JIMENG_VERSION))
+        if JIMENG_VERSION:
+            query_items.append(("Version", JIMENG_VERSION))
     query_string = urlencode(sorted(query_items))
 
-    headers = {
-        "Content-Type": "application/json",
-    }
-
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
     authorization, x_date, payload_hash = generate_volcengine_signature(
-        JIMENG_ACCESS_KEY,
-        JIMENG_SECRET_KEY,
-        "POST",
-        JIMENG_SERVICE,
-        JIMENG_REGION,
-        host,
-        path,
-        query_string,
-        headers,
+            JIMENG_ACCESS_KEY,
+            JIMENG_SECRET_KEY,
+            "POST",
+            JIMENG_SERVICE,
+            JIMENG_REGION,
+            host,
+            path,
+            query_string,
+            headers,
         payload_json,
-    )
-
+        )
+        
     headers.update(
         {
             "Authorization": authorization,
@@ -643,9 +646,9 @@ def _jimeng_make_request(action, payload_dict):
         }
     )
 
-    if query_string:
+        if query_string:
         url = f"{scheme}://{host}{path}?{query_string}"
-    else:
+        else:
         url = f"{scheme}://{host}{path}"
 
     # 调试日志（生产环境可移除）
@@ -654,14 +657,14 @@ def _jimeng_make_request(action, payload_dict):
     print(f"[DEBUG] Query: {query_string}")
     print(f"[DEBUG] Host: {host}")
 
-    response = requests.post(
+        response = requests.post(
         url,
-        headers=headers,
-        data=payload_json.encode("utf-8"),
+            headers=headers,
+            data=payload_json.encode("utf-8"),
         timeout=60,
-    )
+        )
 
-    if response.status_code != 200:
+        if response.status_code != 200:
         raise RuntimeError(f"即夢API調用失敗: {response.status_code} - {response.text}")
 
     body = response.json()
@@ -1093,7 +1096,7 @@ def call_jimeng_v4_api(original_abs_path, prompt):
                 break
             quality -= 5
 
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
         
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1173,7 +1176,7 @@ def call_jimeng_api(original_abs_path, prompt):
                 break
             quality -= 5
 
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
 
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1243,7 +1246,10 @@ def landing_page():
     try:
         # 使用更兼容的排序方式
         approved_images = (
-            GenerateRecord.query.filter(GenerateRecord.status == "approved")
+            GenerateRecord.query.filter(
+                GenerateRecord.status == "approved",
+                func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at) >= GALLERY_APPROVED_SINCE,
+            )
             .order_by(
                 func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at).desc(),
                 GenerateRecord.created_at.desc()
@@ -1783,7 +1789,7 @@ def api_generate_figure():
         elif USE_JIMENG_V4:
             dream_rel = call_jimeng_v4_api(original_rel, prompt)
         else:
-            dream_rel = call_jimeng_api(original_rel, prompt)
+    dream_rel = call_jimeng_api(original_rel, prompt)
     except RuntimeError as e:
         error_msg = str(e)
         error_type = type(e).__name__
@@ -1815,7 +1821,7 @@ def api_generate_figure():
         }), 500
     
     try:
-        thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
+    thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
     except Exception as exc:
         return jsonify({
             "success": False,
@@ -1826,16 +1832,16 @@ def api_generate_figure():
 
     try:
         # 使用登录用户的真实姓名，而不是表单中的 user_name
-        record = GenerateRecord(
+    record = GenerateRecord(
             user_name=user.name if user else None,
-            prompt=prompt,
-            original_image_url=original_rel,
-            thumbnail_url=thumbnail_rel,
-            dream_image_url=dream_rel,
-            status="pending",
-        )
-        db.session.add(record)
-        db.session.commit()
+        prompt=prompt,
+        original_image_url=original_rel,
+        thumbnail_url=thumbnail_rel,
+        dream_image_url=dream_rel,
+        status="pending",
+    )
+    db.session.add(record)
+    db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return jsonify({
@@ -1865,7 +1871,10 @@ def api_approved_generates():
         limit = 6
 
     records = (
-        GenerateRecord.query.filter(GenerateRecord.status == "approved")
+        GenerateRecord.query.filter(
+            GenerateRecord.status == "approved",
+            func.coalesce(GenerateRecord.approved_at, GenerateRecord.created_at) >= GALLERY_APPROVED_SINCE,
+        )
         .order_by(func.random())
         .limit(limit)
         .all()
