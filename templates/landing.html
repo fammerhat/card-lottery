@@ -40,6 +40,23 @@
       text-align: center;
       margin-bottom: 14px;
       padding-top: 4px;
+      position: relative;
+    }
+    .login-status {
+      position: absolute;
+      top: 0;
+      right: 0;
+      font-size: 12px;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .login-status.logged-in {
+      color: #fbbf24;
+    }
+    .login-status .login-name {
+      font-weight: 600;
     }
     .title {
       font-size: 22px;
@@ -388,6 +405,16 @@
 <body>
   <div class="app">
     <div class="header">
+      {% if is_logged_in %}
+      <div class="login-status logged-in">
+        <span>已登录：</span>
+        <span class="login-name">{{ user_name }}</span>
+      </div>
+      {% else %}
+      <div class="login-status">
+        <span>未登录</span>
+      </div>
+      {% endif %}
       <div class="title">11 月财神赐福狂欢季！</div>
       <div class="subtitle"><span class="money">3 元</span>起领红包，<span class="money">50 元</span>大额红包 + 最高可得<span class="money">100元+</span></div>
     </div>
@@ -422,13 +449,13 @@
 
     <div class="actions-wrapper">
       <div class="actions-row">
-        <a href="https://card-lottery.onrender.com/login" class="btn btn-primary">
+        <a href="#" class="btn btn-primary" id="drawCardBtn">
           财神卡抽取
         </a>
         <button class="btn btn-secondary" id="openGenerator">
           生成财神手办
         </button>
-        <a href="https://v.wjx.cn/vm/OPVi0CD.aspx#" target="_blank" class="btn btn-tertiary">
+        <a href="#" class="btn btn-tertiary" id="inviteFriendBtn">
           邀请好友登记
         </a>
       </div>
@@ -484,6 +511,11 @@
     const chatMessages = document.getElementById("chatMessages");
     const gallerySection = document.getElementById("gallerySection");
     const galleryTrack = document.getElementById("galleryTrack");
+    const drawCardBtn = document.getElementById("drawCardBtn");
+    const inviteFriendBtn = document.getElementById("inviteFriendBtn");
+
+    // 登录状态（从后端传递）
+    const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
 
     const RECOMMENDED_PROMPT = "帮我生成图片：用这张图片的脸生成一张Q版财神手办，材质为：黏土或羊毛毡或毛线，随机。财神穿汉服，戴帽子，可以有胡子，形象可以参考五路财神（比干、柴荣、关羽、赵公明、王亥，随机）。整体是喜庆风格，暖色调，背景有一些新年元素。有立体感，有光泽度，手办为全身完整，且有底座，手办的脸部特征要和原图的脸部高度相似，性别相同。一张正方形比例图片。";
 
@@ -495,7 +527,22 @@
     let galleryIndex = 0;
     let galleryTimer = null;
 
+    // 检查登录状态，未登录则跳转到登录页
+    function checkLoginAndRedirect(targetUrl, action) {
+      if (!isLoggedIn) {
+        // 未登录，跳转到登录页，并保存目标页面
+        const loginUrl = `/login?next=${encodeURIComponent(targetUrl)}`;
+        window.location.href = loginUrl;
+        return false;
+      }
+      return true;
+    }
+
     function openDialog() {
+      // 检查登录状态
+      if (!checkLoginAndRedirect(window.location.href, "生成财神手办")) {
+        return;
+      }
       dialogOverlay.style.display = "flex";
       document.body.style.overflow = "hidden";
       ensureChatPlaceholder();
@@ -506,6 +553,24 @@
       document.body.style.overflow = "";
     }
     openGeneratorBtn.addEventListener("click", openDialog);
+    
+    // 财神卡抽取按钮
+    drawCardBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const targetUrl = "/draw";
+      if (checkLoginAndRedirect(targetUrl, "财神卡抽取")) {
+        window.location.href = targetUrl;
+      }
+    });
+    
+    // 邀请好友登记按钮
+    inviteFriendBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const targetUrl = "https://v.wjx.cn/vm/OPVi0CD.aspx#";
+      if (checkLoginAndRedirect(targetUrl, "邀请好友登记")) {
+        window.open(targetUrl, "_blank");
+      }
+    });
     dialogClose.addEventListener("click", closeDialog);
     dialogOverlay.addEventListener("click", (e) => {
       if (e.target === dialogOverlay) closeDialog();

@@ -59,7 +59,16 @@ ADMIN_PASSWORD = "cs168"
 TEAM_CHOICES = ["青龙战队", "白虎战队", "朱雀战队", "玄武战队", "黄龙战队"]
 
 # 即梦AI配置（从环境变量读取，如果没有则使用默认值）
-# 根据火山引擎API文档：https://www.volcengine.com/docs/85621/1747301
+# 即梦4.0使用Bearer Token认证，更简单
+JIMENG_V4_API_URL = os.getenv("JIMENG_V4_API_URL", "")  # 即梦4.0 API地址
+JIMENG_V4_API_TOKEN = os.getenv("JIMENG_V4_API_TOKEN", "")  # 即梦4.0 Bearer Token
+JIMENG_V4_MODEL = os.getenv("JIMENG_V4_MODEL", "doubao-seedream-4-0-250828")  # 模型名称
+USE_JIMENG_V4 = os.getenv("USE_JIMENG_V4", "false").lower() == "true"  # 是否使用即梦4.0
+
+# 如果4.0的Token未配置，尝试使用3.0的AK/SK（某些情况下可能兼容）
+# 注意：这需要根据实际API文档调整
+
+# 即梦3.0配置（旧版本，使用复杂签名）
 JIMENG_API_URL = os.getenv("JIMENG_API_URL", "https://visual.volcengineapi.com")
 JIMENG_API_PATH = os.getenv("JIMENG_API_PATH", "/")
 JIMENG_ACCESS_KEY = os.getenv("JIMENG_ACCESS_KEY", "")  # AK - 从环境变量读取
@@ -682,6 +691,107 @@ def _extract_image_from_result(result_node):
     return None
 
 
+def call_jimeng_v4_api(original_abs_path, prompt):
+    """
+    使用即梦4.0 API进行图生图（使用Bearer Token认证，更简单）。
+    参考文档：https://www.volcengine.com/docs/85621/1817045
+    """
+    # 优先使用4.0的Token，如果没有则尝试使用3.0的AK作为Token（某些API可能支持）
+    api_token = JIMENG_V4_API_TOKEN
+    if not api_token and JIMENG_ACCESS_KEY:
+        # 如果4.0 Token未配置，尝试使用3.0的AK（需要根据实际API调整）
+        api_token = JIMENG_ACCESS_KEY
+        print("[DEBUG] 使用3.0的AK作为4.0的Token（实验性）")
+    
+    if not api_token:
+        raise RuntimeError("JIMENG_V4_API_TOKEN_MISSING: 请配置JIMENG_V4_API_TOKEN或JIMENG_ACCESS_KEY")
+    
+    if not JIMENG_V4_API_URL:
+        raise RuntimeError("JIMENG_V4_API_URL_MISSING: 请在控制台创建推理接入点获取API地址")
+    
+    try:
+        # 准备图片 - 转换为base64
+        source_path = os.path.join(BASE_DIR, original_abs_path.lstrip("/"))
+        with open(source_path, "rb") as img_file:
+            image_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+        
+        # 构建请求
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # 根据文档，即梦4.0支持图生图
+        # 请求体格式可能需要根据实际API文档调整
+        payload = {
+            "model": JIMENG_V4_MODEL,
+            "prompt": prompt,
+            "image": f"data:image/jpeg;base64,{image_base64}",  # 图生图需要传入图片
+            "size": "1024x1024",
+            "n": 1
+        }
+        
+        print(f"[DEBUG] 调用即梦4.0 API: {JIMENG_V4_API_URL}")
+        response = requests.post(
+            JIMENG_V4_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=120
+        )
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"即梦4.0 API调用失败: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        
+        # 解析返回结果 - 根据实际API响应格式调整
+        if "data" in result and len(result["data"]) > 0:
+            image_url = result["data"][0].get("url") or result["data"][0].get("b64_json")
+        elif "image" in result:
+            image_url = result["image"]
+        else:
+            raise RuntimeError(f"即梦4.0 API返回格式异常: {result}")
+        
+        # 保存生成的圖片
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+        
+        if image_url.startswith(("http://", "https://")):
+            img_response = requests.get(image_url, timeout=30)
+            if img_response.status_code != 200:
+                raise Exception(f"下载生成图片失败: {img_response.status_code}")
+            with open(dest_path, "wb") as f:
+                f.write(img_response.content)
+        elif image_url.startswith("data:image"):
+            # base64 data URL
+            if "," in image_url:
+                image_data = image_url.split(",")[1]
+            else:
+                image_data = image_url
+            image_bytes = base64.b64decode(image_data)
+            with open(dest_path, "wb") as f:
+                f.write(image_bytes)
+        else:
+            # 直接是base64字符串
+            image_bytes = base64.b64decode(image_url)
+            with open(dest_path, "wb") as f:
+                f.write(image_bytes)
+        
+        rel_path = dest_path.replace(BASE_DIR + os.sep, "")
+        rel_path = rel_path.replace("\\", "/")
+        return "/" + rel_path
+        
+    except Exception as exc:
+        print(f"即梦4.0 API调用失败: {exc}")
+        import traceback
+        traceback.print_exc()
+        if JIMENG_ALLOW_FALLBACK:
+            print("使用本地 fallback 圖片")
+            return fake_generate_dream_image(original_abs_path)
+        raise
+
+
 def call_jimeng_api(original_abs_path, prompt):
     """
     使用火山引擎同步轉異步接口調用即夢圖生圖3.0。
@@ -820,17 +930,31 @@ def landing_page():
         for item in approved_images
     ]
     
+    # 检查登录状态
+    user_id = session.get("user_id")
+    is_logged_in = bool(user_id)
+    user_name = None
+    if is_logged_in:
+        user = User.query.get(user_id)
+        if user:
+            user_name = user.name
+    
     return render_template(
         "landing.html",
         approved_images=approved_images,
         approved_gallery_data=approved_gallery_data,
+        is_logged_in=is_logged_in,
+        user_name=user_name,
     )
 
 
 @app.route("/login", methods=["GET", "POST"])
 def user_login_page():
-    # 已登录且 session 未过期，直接进抽卡页
+    # 已登录且 session 未过期，检查是否有目标页面
     if request.method == "GET" and session.get("user_id"):
+        next_page = request.args.get("next")
+        if next_page:
+            return redirect(next_page)
         return redirect(url_for("draw_page"))
 
     error = None
@@ -911,6 +1035,11 @@ def user_login_page():
         # 設定 7 天免登入
         session.permanent = True
         session["user_id"] = user.user_id
+        
+        # 检查是否有目标页面
+        next_page = request.args.get("next") or request.form.get("next")
+        if next_page:
+            return redirect(next_page)
         return redirect(url_for("draw_page"))
 
     # GET 请求：检查是否有已存在的用户（通过 URL 参数或 session 判断）
@@ -1114,9 +1243,12 @@ def api_generate_figure():
     except Exception as exc:  # pylint: disable=broad-except
         return jsonify({"success": False, "error": "IMAGE_PROCESS_FAIL", "detail": str(exc)}), 500
 
-    # 調用即夢AI生成圖片（只生成一個結果，節省用量）
+    # 調用即夢AI生成圖片（根据配置选择4.0或3.0）
     try:
-        dream_rel = call_jimeng_api(original_rel, prompt)
+        if USE_JIMENG_V4:
+            dream_rel = call_jimeng_v4_api(original_rel, prompt)
+        else:
+            dream_rel = call_jimeng_api(original_rel, prompt)
     except RuntimeError as e:
         error_msg = str(e)
         # 如果是签名错误，返回更详细的错误信息
