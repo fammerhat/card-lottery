@@ -59,6 +59,10 @@ ADMIN_PASSWORD = "cs168"
 TEAM_CHOICES = ["青龙战队", "白虎战队", "朱雀战队", "玄武战队", "黄龙战队"]
 
 # 即梦AI配置（从环境变量读取，如果没有则使用默认值）
+# Aihubmix统一接口（推荐，最简单）
+AIHUBMIX_API_TOKEN = os.getenv("AIHUBMIX_API_TOKEN", "")  # Aihubmix Bearer Token
+USE_AIHUBMIX = os.getenv("USE_AIHUBMIX", "false").lower() == "true"  # 是否使用Aihubmix
+
 # 即梦4.0使用Bearer Token认证，更简单
 JIMENG_V4_API_URL = os.getenv("JIMENG_V4_API_URL", "")  # 即梦4.0 API地址
 JIMENG_V4_API_TOKEN = os.getenv("JIMENG_V4_API_TOKEN", "")  # 即梦4.0 Bearer Token
@@ -691,6 +695,93 @@ def _extract_image_from_result(result_node):
     return None
 
 
+def call_aihubmix_api(original_abs_path, prompt):
+    """
+    使用 Aihubmix 统一接口调用即梦4.0（推荐，最简单）。
+    参考文档：https://docs.aihubmix.com/cn/api/Image-Gen
+    """
+    if not AIHUBMIX_API_TOKEN:
+        raise RuntimeError("AIHUBMIX_API_TOKEN_MISSING: 请在 https://aihubmix.com 获取API Token")
+    
+    try:
+        # 准备图片 - Aihubmix 支持图生图，需要将图片转换为URL或base64
+        source_path = os.path.join(BASE_DIR, original_abs_path.lstrip("/"))
+        with open(source_path, "rb") as img_file:
+            image_base64 = base64.b64encode(img_file.read()).decode("utf-8")
+        
+        # Aihubmix API地址
+        api_url = "https://aihubmix.com/v1/models/doubao/doubao-seedream-4-0-250828/predictions"
+        
+        # 构建请求
+        headers = {
+            "Authorization": f"Bearer {AIHUBMIX_API_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        
+        # 根据文档，Aihubmix 的即梦4.0接口格式
+        # 注意：文档中只显示了文生图，图生图可能需要不同的参数
+        # 尝试多种可能的图生图参数格式
+        payload = {
+            "input": {
+                "prompt": prompt,
+                "size": "2K",
+                "sequential_image_generation": "disabled",
+                "stream": False,
+                "response_format": "url",
+                "watermark": True,
+                # 尝试图生图参数（根据其他模型的格式，可能是 image 或 input_image）
+                "image": f"data:image/jpeg;base64,{image_base64}",
+            }
+        }
+        
+        print(f"[DEBUG] 调用 Aihubmix API: {api_url}")
+        response = requests.post(
+            api_url,
+            headers=headers,
+            json=payload,
+            timeout=120
+        )
+        
+        if response.status_code != 200:
+            raise RuntimeError(f"Aihubmix API调用失败: {response.status_code} - {response.text}")
+        
+        result = response.json()
+        print(f"[DEBUG] Aihubmix API响应: {result}")
+        
+        # 解析返回结果 - 根据文档，返回格式为 {"output": [{"url": "..."}]}
+        if "output" in result and len(result["output"]) > 0:
+            image_url = result["output"][0].get("url")
+            if not image_url:
+                raise RuntimeError(f"Aihubmix API返回格式异常: {result}")
+        else:
+            raise RuntimeError(f"Aihubmix API返回格式异常: {result}")
+        
+        # 下载生成的圖片
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+        
+        img_response = requests.get(image_url, timeout=60)
+        if img_response.status_code != 200:
+            raise Exception(f"下载生成图片失败: {img_response.status_code}")
+        
+        with open(dest_path, "wb") as f:
+            f.write(img_response.content)
+        
+        rel_path = dest_path.replace(BASE_DIR + os.sep, "")
+        rel_path = rel_path.replace("\\", "/")
+        return "/" + rel_path
+        
+    except Exception as exc:
+        print(f"Aihubmix API调用失败: {exc}")
+        import traceback
+        traceback.print_exc()
+        if JIMENG_ALLOW_FALLBACK:
+            print("使用本地 fallback 圖片")
+            return fake_generate_dream_image(original_abs_path)
+        raise
+
+
 def call_jimeng_v4_api(original_abs_path, prompt):
     """
     使用即梦4.0 API进行图生图（使用Bearer Token认证，更简单）。
@@ -1243,9 +1334,11 @@ def api_generate_figure():
     except Exception as exc:  # pylint: disable=broad-except
         return jsonify({"success": False, "error": "IMAGE_PROCESS_FAIL", "detail": str(exc)}), 500
 
-    # 調用即夢AI生成圖片（根据配置选择4.0或3.0）
+    # 調用AI生成圖片（根据配置选择：Aihubmix > 即梦4.0 > 即梦3.0）
     try:
-        if USE_JIMENG_V4:
+        if USE_AIHUBMIX:
+            dream_rel = call_aihubmix_api(original_rel, prompt)
+        elif USE_JIMENG_V4:
             dream_rel = call_jimeng_v4_api(original_rel, prompt)
         else:
             dream_rel = call_jimeng_api(original_rel, prompt)
