@@ -249,30 +249,37 @@
     }
     .gallery-header {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-start;
       align-items: center;
       font-size: 13px;
       color: #cbd5e1;
+      font-weight: 600;
     }
     .gallery-track {
-      height: 140px;
       border-radius: 14px;
       border: 1px solid rgba(148, 163, 184, 0.25);
-      overflow: hidden;
-      position: relative;
+      padding: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      display: flex;
+      gap: 8px;
+      min-height: 0;
     }
     .gallery-track img {
+      flex: 1;
+      aspect-ratio: 1 / 1;
       width: 100%;
-      height: 140px;
       object-fit: cover;
-      border-radius: 14px;
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      transition: opacity 0.8s ease;
+      border-radius: 12px;
+      opacity: 0.75;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      border: 1px solid transparent;
+      box-shadow: 0 0 0 rgba(251, 191, 36, 0);
     }
     .gallery-track img.active {
       opacity: 1;
+      transform: scale(1.02);
+      border-color: rgba(251, 191, 36, 0.5);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
     }
     .tip {
       font-size: 11px;
@@ -585,7 +592,7 @@
     }
   </style>
 </head>
-<body>
+<body data-is-logged-in="{{ 'true' if is_logged_in else 'false' }}">
   <div class="app">
     {% if flash_messages %}
       {% for category, message in flash_messages %}
@@ -648,10 +655,7 @@
         </a>
       </div>
       <div class="gallery-section" id="gallerySection">
-        <div class="gallery-header">
-          <span>玩家生成展示</span>
-          <span style="font-size:11px;">3 秒自动轮播</span>
-        </div>
+        <div class="gallery-header">大家生成的财神手办</div>
         <div class="gallery-track" id="galleryTrack"></div>
       </div>
     </div>
@@ -717,7 +721,7 @@
     const quotaHint = document.getElementById("quotaHint");
 
     // 登录状态（从后端传递）
-    const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
+    const isLoggedIn = document.body.dataset.isLoggedIn === "true";
     
     // 获取生成配额（仅用于检查是否用完，不显示动态次数）
     async function updateQuota() {
@@ -758,9 +762,13 @@
     let lastFile = null;
     let lastPrompt = "";
     let lastPreviewUrl = "";
-    let galleryImages = [];
+    const GALLERY_VISIBLE_COUNT = 3;
+    let galleryData = [];
+    let gallerySlots = [];
     let galleryIndex = 0;
     let galleryTimer = null;
+    let pendingUserMessage = null;
+    let pendingUserMessageEl = null;
 
     // 检查登录状态，未登录则跳转到登录页
     function checkLoginAndRedirect(targetUrl, action) {
@@ -773,7 +781,7 @@
       return true;
     }
 
-    function openDialog() {
+    async function openDialog() {
       // 检查登录状态
       if (!checkLoginAndRedirect(window.location.href, "生成财神手办")) {
         return;
@@ -781,13 +789,11 @@
       dialogOverlay.style.display = "flex";
       document.body.style.overflow = "hidden";
       
-      // 恢复聊天记录
-      const hasHistory = chatMessages.querySelectorAll(".chat-message:not(.placeholder)").length > 0;
-      if (!hasHistory) {
-        restoreChatHistory();
-      }
-      if (chatMessages.querySelectorAll(".chat-message").length === 0) {
+      await restoreChatHistory();
+      if (!chatMessages.querySelector(".chat-message")) {
         ensureChatPlaceholder();
+      } else {
+        clearPlaceholder();
       }
       
       updateQuota().then(() => {
@@ -874,40 +880,82 @@
       validateSendButton();
     });
 
-    // 保存聊天记录到localStorage
-    function saveChatHistory() {
-      const messages = [];
-      chatMessages.querySelectorAll(".chat-message:not(.placeholder)").forEach((msgEl) => {
-        const msgData = {
-          type: msgEl.className.includes("user") ? "user" : 
-                msgEl.className.includes("ai") ? "ai" : "system",
-          label: msgEl.querySelector(".msg-label")?.textContent || "",
-          text: msgEl.querySelector("div:not(.msg-label):not(.save-hint)")?.textContent || "",
-          imageUrl: msgEl.querySelector("img")?.src || "",
-          showSaveHint: !!msgEl.querySelector(".save-hint"),
-        };
-        messages.push(msgData);
-      });
-      localStorage.setItem("generate_chat_history", JSON.stringify(messages));
-    }
-    
-    // 恢复聊天记录
-    function restoreChatHistory() {
+    const CHAT_IMAGE_MAX_LENGTH = 380000;
+    let historyLoaded = false;
+
+    async function restoreChatHistory() {
+      if (!isLoggedIn || historyLoaded) return;
       try {
-        const saved = localStorage.getItem("generate_chat_history");
-        if (saved) {
-          const messages = JSON.parse(saved);
-          messages.forEach((msgData) => {
-            appendMessage(msgData, false); // false表示不保存到localStorage（避免重复）
+        const resp = await fetch("/api/chat-history");
+        const data = await resp.json();
+        if (data.success && Array.isArray(data.items)) {
+          data.items.forEach((msgData) => {
+            appendMessage(
+              {
+                type: msgData.type,
+                label: msgData.label,
+                text: msgData.text,
+                imageUrl: msgData.image_url,
+                showSaveHint: msgData.show_save_hint,
+              },
+              { persist: false }
+            );
           });
-          chatMessages.scrollTop = chatMessages.scrollHeight;
+          historyLoaded = true;
+          if (data.items.length) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+          } else {
+            ensureChatPlaceholder();
+          }
         }
       } catch (error) {
         console.error("恢复聊天记录失败:", error);
       }
     }
 
-    function appendMessage({ type, label, text, imageUrl, actions, showSaveHint }, saveToStorage = true) {
+    async function persistChatMessage(message, options = {}) {
+      if (!isLoggedIn) return;
+      const allowBase64Image = options.allowBase64Image || false;
+      const payload = {
+        type: message.type,
+        label: message.label || "",
+        text: message.text || "",
+        image_url: "",
+        show_save_hint: !!message.showSaveHint,
+      };
+
+      if (message.imageUrl) {
+        if (message.imageUrl.startsWith("data:")) {
+          if (!allowBase64Image) {
+            // 等待后端返回正式URL再保存
+            return;
+          }
+          payload.image_url = message.imageUrl.slice(0, CHAT_IMAGE_MAX_LENGTH);
+        } else {
+          payload.image_url = message.imageUrl;
+        }
+      }
+
+      if (!payload.text && !payload.image_url) {
+        return;
+      }
+
+      try {
+        await fetch("/api/chat-history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (error) {
+        console.error("保存聊天记录失败:", error);
+      }
+    }
+
+    function appendMessage({ type, label, text, imageUrl, actions, showSaveHint }, options = {}) {
+      const persist = options.persist !== false;
+      const allowBase64Image = !!options.allowBase64Image;
       const msg = document.createElement("div");
       msg.className = `chat-message ${type}`;
       if (label) {
@@ -946,13 +994,51 @@
       }
       chatMessages.appendChild(msg);
       chatMessages.scrollTop = chatMessages.scrollHeight;
-      
-      // 保存到localStorage（排除进度条消息）
-      if (saveToStorage && !msg.querySelector(".progress-container")) {
-        saveChatHistory();
+
+      if (persist && !msg.querySelector(".progress-container")) {
+        persistChatMessage(
+          {
+            type,
+            label,
+            text,
+            imageUrl,
+            showSaveHint,
+          },
+          { allowBase64Image }
+        );
       }
       
       return msg;
+    }
+
+    function updateMessageImage(messageEl, imageUrl) {
+      if (!messageEl || !imageUrl) return;
+      let img = messageEl.querySelector("img");
+      if (!img) {
+        img = document.createElement("img");
+        messageEl.appendChild(img);
+      }
+      img.src = imageUrl;
+    }
+
+    function finalizePendingUserMessage(imageUrlFromServer = "", options = {}) {
+      if (!pendingUserMessage) return;
+      if (imageUrlFromServer) {
+        pendingUserMessage.imageUrl = imageUrlFromServer;
+        if (pendingUserMessageEl) {
+          updateMessageImage(pendingUserMessageEl, imageUrlFromServer);
+        }
+      }
+      const allowBase64Image =
+        options.allowBase64Image ||
+        (!imageUrlFromServer &&
+          pendingUserMessage.imageUrl &&
+          pendingUserMessage.imageUrl.startsWith("data:"));
+      persistChatMessage(pendingUserMessage, {
+        allowBase64Image,
+      });
+      pendingUserMessage = null;
+      pendingUserMessageEl = null;
     }
 
     function startProgress(messageEl) {
@@ -1144,18 +1230,32 @@
 
         const previewUrl = getCurrentPreviewUrl();
 
-        appendMessage({
+        const userLabel = isRetry ? "重新生成" : "我的口令";
+        const displayedImage = previewUrl || lastPreviewUrl || null;
+        pendingUserMessage = {
           type: "user",
-          label: isRetry ? "重新生成" : "我的口令",
+          label: userLabel,
           text: promptText,
-          imageUrl: previewUrl || lastPreviewUrl || null,
-        });
+          imageUrl: displayedImage || "",
+        };
+        pendingUserMessageEl = appendMessage(
+          {
+            type: "user",
+            label: userLabel,
+            text: promptText,
+            imageUrl: displayedImage,
+          },
+          { persist: false }
+        );
 
-        statusMsg = appendMessage({
+        statusMsg = appendMessage(
+          {
           type: "system",
           label: "系统",
           text: "",
-        }, false); // 不保存进度条消息到历史记录
+          },
+          { persist: false }
+        ); // 不保存进度条消息
         progress = startProgress(statusMsg);
 
         const formData = new FormData();
@@ -1196,11 +1296,15 @@
                 text: data.message || "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
               });
             }
+            finalizePendingUserMessage(data.original_image_url || "", {
+              allowBase64Image: !data.original_image_url,
+            });
           } else {
             progress.finish(true);
             lastPrompt = promptText;
             lastFile = fileToUse;
-            lastPreviewUrl = previewUrl;
+            lastPreviewUrl = data.original_image_url || previewUrl;
+            finalizePendingUserMessage(data.original_image_url || "");
             const resultMsg = appendMessage({
               type: "ai",
               label: "财神助手",
@@ -1228,6 +1332,7 @@
             label: "提示",
             text: "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
           });
+          finalizePendingUserMessage("", { allowBase64Image: true });
         } finally {
           requestInFlight = false;
           resetGenerateInputs();
@@ -1246,6 +1351,7 @@
           label: "提示",
           text: "生成流程出现异常，请刷新后重试",
         });
+        finalizePendingUserMessage("", { allowBase64Image: true });
         if (!requestInFlight) {
           // 如果请求尚未发出，手动恢复按钮状态（保留用户输入，便于再次尝试）
           sendBtn.disabled = false;
@@ -1257,27 +1363,51 @@
 
     sendBtn.addEventListener("click", () => sendGenerate(false));
 
-    function renderGallery(images) {
+    function clearGalleryTimer() {
+      if (galleryTimer) {
+        clearInterval(galleryTimer);
+        galleryTimer = null;
+      }
+    }
+
+    function setupGallerySlots(count) {
       galleryTrack.innerHTML = "";
-      if (!images.length) {
+      for (let i = 0; i < count; i += 1) {
+        const img = document.createElement("img");
+        galleryTrack.appendChild(img);
+      }
+      gallerySlots = Array.from(galleryTrack.querySelectorAll("img"));
+    }
+
+    function updateGalleryDisplay() {
+      if (!gallerySlots.length || !galleryData.length) return;
+      const total = galleryData.length;
+      gallerySlots.forEach((img, idx) => {
+        const dataIndex = (galleryIndex + idx) % total;
+        const item = galleryData[dataIndex];
+        img.src = item.thumbnail_url;
+        img.alt = item.prompt || "生成结果";
+        img.classList.toggle("active", idx === 0);
+      });
+    }
+
+    function renderGallery(images) {
+      galleryData = images.slice();
+      if (!galleryData.length) {
         gallerySection.style.display = "none";
+        clearGalleryTimer();
         return;
       }
       gallerySection.style.display = "flex";
-      images.forEach((img, idx) => {
-        const node = document.createElement("img");
-        node.src = img.thumbnail_url;
-        if (idx === 0) node.classList.add("active");
-        galleryTrack.appendChild(node);
-      });
-      galleryImages = Array.from(galleryTrack.querySelectorAll("img"));
+      const visibleCount = Math.min(GALLERY_VISIBLE_COUNT, galleryData.length);
+      setupGallerySlots(visibleCount);
       galleryIndex = 0;
-      if (galleryTimer) clearInterval(galleryTimer);
-      if (galleryImages.length > 1) {
+      updateGalleryDisplay();
+      clearGalleryTimer();
+      if (galleryData.length > visibleCount) {
         galleryTimer = setInterval(() => {
-          galleryImages[galleryIndex].classList.remove("active");
-          galleryIndex = (galleryIndex + 1) % galleryImages.length;
-          galleryImages[galleryIndex].classList.add("active");
+          galleryIndex = (galleryIndex + 1) % galleryData.length;
+          updateGalleryDisplay();
         }, 3000);
       }
     }
@@ -1298,7 +1428,7 @@
     }
 
     if (initialGallery.length) {
-      renderGallery(initialGallery.slice(0, 3));
+      renderGallery(initialGallery);
     } else {
       loadApprovedImages();
     }

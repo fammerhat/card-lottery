@@ -52,7 +52,7 @@ if database_url:
     print(f"[INFO] 使用 PostgreSQL 数据库")
 else:
     # 本地开发使用 SQLite
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     print(f"[INFO] 使用 SQLite 数据库: {db_path}")
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -104,6 +104,10 @@ JIMENG_RESULT_ACTION = os.getenv("JIMENG_RESULT_ACTION", "CVSync2AsyncGetResult"
 JIMENG_VERSION = os.getenv("JIMENG_VERSION", "2022-08-31")
 JIMENG_REQ_KEY = os.getenv("JIMENG_REQ_KEY", "i2i_v30_jimeng")
 JIMENG_ALLOW_FALLBACK = os.getenv("JIMENG_ALLOW_FALLBACK", "false").lower() == "true"
+
+# 聊天记录配置
+CHAT_IMAGE_URL_MAX_LENGTH = int(os.getenv("CHAT_IMAGE_URL_MAX_LENGTH", "400000"))
+CHAT_MESSAGE_TYPES = {"user", "ai", "system"}
 
 
 def _env_float(var_name, default_value):
@@ -201,6 +205,33 @@ class GenerateRecord(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class GenerateChatMessage(db.Model):
+    """存储用户当天的生成聊天记录"""
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.user_id"), nullable=False)
+    message_type = db.Column(db.String(20), nullable=False)
+    label = db.Column(db.String(100), nullable=True)
+    text = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.Text, nullable=True)
+    show_save_hint = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    chat_date = db.Column(db.Date, nullable=False, index=True)
+
+    user = db.relationship("User", backref="chat_messages")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "type": self.message_type,
+            "label": self.label or "",
+            "text": self.text or "",
+            "image_url": self.image_url or "",
+            "show_save_hint": self.show_save_hint,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
 class TeamRankSnapshot(db.Model):
     """战队排名历史快照"""
     id = db.Column(db.Integer, primary_key=True)
@@ -226,20 +257,16 @@ def calculate_team_stats():
         team_name = user.team
         if team_name not in teams:
             teams[team_name] = {
-                "total_cards": set(),  # 使用set去重
+                "total_cards": 0,
                 "total_draws": 0,
             }
         
-        # 统计该用户集齐的卡种类（去重）
-        user_cards = set([uc.card_id for uc in user.cards])
-        teams[team_name]["total_cards"].update(user_cards)
+        # 统计该用户集齐的卡种类（去重），累加到战队总数
+        user_cards = {uc.card_id for uc in user.cards}
+        teams[team_name]["total_cards"] += len(user_cards)
         
         # 累加抽卡次数
         teams[team_name]["total_draws"] += user.consumed_draws
-    
-    # 转换为卡数量
-    for team_name in teams:
-        teams[team_name]["total_cards"] = len(teams[team_name]["total_cards"])
     
     return teams
 
@@ -380,6 +407,21 @@ def require_admin():
 def log_admin_action(admin_name: str, action: str):
     log = AdminLog(admin_name=admin_name, action=action)
     db.session.add(log)
+    db.session.commit()
+
+
+def get_today_chat_date():
+    return datetime.utcnow().date()
+
+
+def cleanup_old_chat_messages(user_id=None):
+    """删除过期的聊天记录（默认保留当天记录）"""
+    today = get_today_chat_date()
+    query = GenerateChatMessage.query.filter(GenerateChatMessage.chat_date < today)
+    if user_id:
+        query = query.filter(GenerateChatMessage.user_id == user_id)
+    deleted = query.delete(synchronize_session=False)
+    if deleted:
     db.session.commit()
 
 
@@ -571,12 +613,12 @@ def _jimeng_make_request(action, payload_dict):
     scheme, host, path = _build_jimeng_request_components()
 
     query_items = [("Action", action)]
-    if JIMENG_VERSION:
-        query_items.append(("Version", JIMENG_VERSION))
+        if JIMENG_VERSION:
+            query_items.append(("Version", JIMENG_VERSION))
     query_string = urlencode(sorted(query_items))
 
-    headers = {
-        "Content-Type": "application/json",
+        headers = {
+            "Content-Type": "application/json",
         }
         
     authorization, x_date, payload_hash = generate_volcengine_signature(
@@ -601,9 +643,9 @@ def _jimeng_make_request(action, payload_dict):
         }
     )
 
-    if query_string:
+        if query_string:
         url = f"{scheme}://{host}{path}?{query_string}"
-    else:
+        else:
         url = f"{scheme}://{host}{path}"
 
     # 调试日志（生产环境可移除）
@@ -612,14 +654,14 @@ def _jimeng_make_request(action, payload_dict):
     print(f"[DEBUG] Query: {query_string}")
     print(f"[DEBUG] Host: {host}")
 
-    response = requests.post(
+        response = requests.post(
         url,
             headers=headers,
             data=payload_json.encode("utf-8"),
         timeout=60,
         )
 
-    if response.status_code != 200:
+        if response.status_code != 200:
         raise RuntimeError(f"即夢API調用失敗: {response.status_code} - {response.text}")
 
     body = response.json()
@@ -1051,7 +1093,7 @@ def call_jimeng_v4_api(original_abs_path, prompt):
                 break
             quality -= 5
         
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
         
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1131,7 +1173,7 @@ def call_jimeng_api(original_abs_path, prompt):
                 break
             quality -= 5
         
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
 
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1567,6 +1609,76 @@ def api_team_rank():
     )
 
 
+@app.route("/api/chat-history", methods=["GET", "POST"])
+def api_chat_history():
+    """获取或保存当天的生成聊天记录"""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "NOT_LOGIN"}), 401
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "USER_NOT_FOUND"}), 404
+
+    cleanup_old_chat_messages(user_id=user_id)
+    today = get_today_chat_date()
+
+    if request.method == "GET":
+        messages = (
+            GenerateChatMessage.query.filter_by(user_id=user_id, chat_date=today)
+            .order_by(GenerateChatMessage.created_at.asc())
+            .all()
+        )
+        return jsonify(
+            {
+                "success": True,
+                "items": [msg.to_dict() for msg in messages],
+            }
+        )
+
+    data = request.get_json(silent=True) or {}
+    message_type = (data.get("type") or "").strip().lower()
+    if message_type not in CHAT_MESSAGE_TYPES:
+        return jsonify({"success": False, "error": "TYPE_INVALID"}), 400
+
+    label = (data.get("label") or "").strip() or None
+    text = (data.get("text") or "").strip()
+    image_url = (data.get("image_url") or "").strip()
+    show_save_hint = bool(data.get("show_save_hint"))
+
+    if not text:
+        text = None
+    if image_url:
+        if len(image_url) > CHAT_IMAGE_URL_MAX_LENGTH:
+            print("[WARN] chat image_url 太长，自动截断")
+            image_url = image_url[:CHAT_IMAGE_URL_MAX_LENGTH]
+    else:
+        image_url = None
+
+    if not text and not image_url:
+        return jsonify({"success": False, "error": "EMPTY_CONTENT"}), 400
+
+    message = GenerateChatMessage(
+        user_id=user_id,
+        message_type=message_type,
+        label=label,
+        text=text,
+        image_url=image_url,
+        show_save_hint=show_save_hint,
+        chat_date=today,
+    )
+
+    try:
+        db.session.add(message)
+        db.session.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        db.session.rollback()
+        print(f"[ERROR] 保存聊天记录失败: {exc}")
+        return jsonify({"success": False, "error": "DB_ERROR"}), 500
+
+    return jsonify({"success": True, "message_id": message.id})
+
+
 @app.route("/api/generate-quota", methods=["GET"])
 def api_generate_quota():
     """获取用户当天的生成次数配额"""
@@ -1611,6 +1723,7 @@ def api_generate_quota():
 def api_generate_figure():
     prompt = (request.form.get("prompt") or "").strip()
     image_file = request.files.get("image")
+    original_rel = None
 
     if not prompt:
         return jsonify({"success": False, "error": "PROMPT_REQUIRED"}), 400
@@ -1684,7 +1797,8 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "API_CALL_FAILED",
-            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+            "original_image_url": original_rel,
         }), 500
     except Exception as exc:
         error_type = type(exc).__name__
@@ -1696,7 +1810,8 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "UNKNOWN_ERROR",
-            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+            "original_image_url": original_rel,
         }), 500
     
     try:
@@ -1705,7 +1820,8 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "THUMBNAIL_FAIL",
-            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+            "original_image_url": original_rel,
         }), 500
 
     try:
@@ -1717,7 +1833,7 @@ def api_generate_figure():
             thumbnail_url=thumbnail_rel,
             dream_image_url=dream_rel,
             status="pending",
-    )
+        )
         db.session.add(record)
         db.session.commit()
     except Exception as exc:
@@ -1725,7 +1841,8 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "DB_ERROR",
-            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+            "original_image_url": original_rel,
         }), 500
 
     return jsonify(
@@ -1734,6 +1851,7 @@ def api_generate_figure():
             "record_id": record.id,
             "thumbnail_url": thumbnail_rel,
             "dream_image_url": dream_rel,
+            "original_image_url": original_rel,
             "status": record.status,
             "message": "圖片已提交，待管理員審核後即可展示。",
         }
