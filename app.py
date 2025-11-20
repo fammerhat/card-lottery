@@ -7,6 +7,10 @@ import time as pytime
 import uuid
 import base64
 import requests
+from requests.exceptions import (
+    Timeout, ConnectionError, RequestException,
+    ConnectTimeout, ReadTimeout, SSLError
+)
 import hmac
 import hashlib
 import json
@@ -558,20 +562,20 @@ def _jimeng_make_request(action, payload_dict):
     headers = {
         "Content-Type": "application/json",
     }
-
+    
     authorization, x_date, payload_hash = generate_volcengine_signature(
-        JIMENG_ACCESS_KEY,
-        JIMENG_SECRET_KEY,
-        "POST",
-        JIMENG_SERVICE,
-        JIMENG_REGION,
-        host,
-        path,
-        query_string,
-        headers,
+            JIMENG_ACCESS_KEY,
+            JIMENG_SECRET_KEY,
+            "POST",
+            JIMENG_SERVICE,
+            JIMENG_REGION,
+            host,
+            path,
+            query_string,
+            headers,
         payload_json,
-    )
-
+        )
+        
     headers.update(
         {
             "Authorization": authorization,
@@ -695,6 +699,77 @@ def _extract_image_from_result(result_node):
     return None
 
 
+# 网络错误类型（可重试）
+RETRYABLE_EXCEPTIONS = (
+    Timeout, ConnectionError, ConnectTimeout, ReadTimeout,
+    RequestException, SSLError
+)
+
+
+def retry_with_backoff(max_retries=3, base_delay=1, max_delay=8):
+    """
+    重试装饰器，使用指数退避策略
+    max_retries: 最大重试次数（不包括首次尝试）
+    base_delay: 基础延迟（秒）
+    max_delay: 最大延迟（秒）
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except RETRYABLE_EXCEPTIONS as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        # 指数退避：1s, 2s, 4s
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        print(f"[RETRY] {func.__name__} 第 {attempt + 1} 次尝试失败（网络错误）: {type(e).__name__}: {str(e)}")
+                        print(f"[RETRY] {delay} 秒后重试...")
+                        pytime.sleep(delay)
+                    else:
+                        print(f"[RETRY] {func.__name__} 重试 {max_retries} 次后仍失败")
+                        raise RuntimeError(f"网络请求失败（已重试{max_retries}次）: {type(e).__name__}: {str(e)}") from e
+                except Exception as e:
+                    # 非网络错误，不重试，直接抛出
+                    print(f"[ERROR] {func.__name__} 发生非网络错误（不重试）: {type(e).__name__}: {str(e)}")
+                    raise
+            if last_exception:
+                raise last_exception
+        return wrapper
+    return decorator
+
+
+def download_image_with_retry(image_url, max_retries=3, timeout=30):
+    """
+    下载图片，带重试机制
+    """
+    last_exception = None
+    for attempt in range(max_retries + 1):
+        try:
+            print(f"[DOWNLOAD] 下载图片 (尝试 {attempt + 1}/{max_retries + 1}): {image_url[:50]}...")
+            img_response = requests.get(image_url, timeout=timeout)
+            if img_response.status_code == 200:
+                return img_response.content
+            else:
+                raise RuntimeError(f"下载图片失败: HTTP {img_response.status_code}")
+        except RETRYABLE_EXCEPTIONS as e:
+            last_exception = e
+            if attempt < max_retries:
+                delay = min(1 * (2 ** attempt), 4)  # 1s, 2s, 4s
+                print(f"[RETRY] 图片下载失败，{delay} 秒后重试... ({type(e).__name__})")
+                pytime.sleep(delay)
+            else:
+                raise RuntimeError(f"图片下载失败（已重试{max_retries}次）: {type(e).__name__}: {str(e)}") from e
+        except Exception as e:
+            # 非网络错误，不重试
+            raise RuntimeError(f"图片下载失败: {type(e).__name__}: {str(e)}") from e
+    
+    if last_exception:
+        raise last_exception
+    raise RuntimeError("图片下载失败：未知错误")
+
+
 def call_aihubmix_api(original_abs_path, prompt):
     """
     使用 Aihubmix 统一接口调用即梦4.0（推荐，最简单）。
@@ -734,35 +809,67 @@ def call_aihubmix_api(original_abs_path, prompt):
             }
         }
         
-        print(f"[DEBUG] 调用 Aihubmix API: {api_url}")
-        response = requests.post(
-            api_url,
-            headers=headers,
-            json=payload,
-            timeout=120
-        )
+        print(f"[API] 调用 Aihubmix API: {api_url}")
         
-        if response.status_code != 200:
-            raise RuntimeError(f"Aihubmix API调用失败: {response.status_code} - {response.text}")
+        # API调用带重试
+        last_exception = None
+        response = None
+        for attempt in range(4):  # 最多4次尝试（1次初始 + 3次重试）
+            try:
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=60  # 优化超时时间
+                )
+                if response.status_code == 200:
+                    break
+                elif response.status_code in [401, 403]:
+                    # 认证错误，不重试
+                    raise RuntimeError(f"Aihubmix API认证失败: {response.status_code} - {response.text}")
+                elif response.status_code >= 500:
+                    # 服务器错误，可重试
+                    if attempt < 3:
+                        delay = min(1 * (2 ** attempt), 4)
+                        print(f"[RETRY] Aihubmix API服务器错误 {response.status_code}，{delay} 秒后重试...")
+                        pytime.sleep(delay)
+                        continue
+                    else:
+                        raise RuntimeError(f"Aihubmix API服务器错误（已重试3次）: {response.status_code} - {response.text}")
+                else:
+                    # 其他客户端错误，不重试
+                    raise RuntimeError(f"Aihubmix API调用失败: {response.status_code} - {response.text}")
+            except RETRYABLE_EXCEPTIONS as e:
+                last_exception = e
+                if attempt < 3:
+                    delay = min(1 * (2 ** attempt), 4)
+                    print(f"[RETRY] Aihubmix API网络错误，{delay} 秒后重试... ({type(e).__name__})")
+                    pytime.sleep(delay)
+                else:
+                    raise RuntimeError(f"Aihubmix API网络请求失败（已重试3次）: {type(e).__name__}: {str(e)}") from e
         
+        if not response or response.status_code != 200:
+            if last_exception:
+                raise last_exception
+            raise RuntimeError(f"Aihubmix API调用失败: 未知错误")
+
         result = response.json()
-        print(f"[DEBUG] Aihubmix API响应: {result}")
+        print(f"[API] Aihubmix API响应成功")
         
         # 解析返回结果 - 根据文档，返回格式为 {"output": [{"url": "..."}]}
         if "output" in result and len(result["output"]) > 0:
             image_url = result["output"][0].get("url")
             if not image_url:
-                raise RuntimeError(f"Aihubmix API返回格式异常: {result}")
+                raise RuntimeError(f"Aihubmix API返回格式异常: 缺少图片URL")
         else:
-            raise RuntimeError(f"Aihubmix API返回格式异常: {result}")
+            raise RuntimeError(f"Aihubmix API返回格式异常: 缺少output字段")
         
-        # 下载生成的圖片
-        img_response = requests.get(image_url, timeout=60)
-        if img_response.status_code != 200:
-            raise Exception(f"下载生成图片失败: {img_response.status_code}")
+        # 下载生成的圖片（带重试）
+        print(f"[DOWNLOAD] 开始下载生成的图片...")
+        img_content = download_image_with_retry(image_url, max_retries=3, timeout=30)
         
         # 压缩图片到50KB以下
-        image = Image.open(BytesIO(img_response.content))
+        image = Image.open(BytesIO(img_content))
         image = image.convert("RGB")
         # 限制最大尺寸为1024x1024
         image.thumbnail((1024, 1024), Image.LANCZOS)
@@ -770,7 +877,7 @@ def call_aihubmix_api(original_abs_path, prompt):
         os.makedirs(GENERATED_DIR, exist_ok=True)
         filename = f"dream_{uuid.uuid4().hex}.jpg"
         dest_path = os.path.join(GENERATED_DIR, filename)
-        
+
         quality = 85
         output = BytesIO()
         while True:
@@ -839,18 +946,49 @@ def call_jimeng_v4_api(original_abs_path, prompt):
             "n": 1
         }
         
-        print(f"[DEBUG] 调用即梦4.0 API: {JIMENG_V4_API_URL}")
-        response = requests.post(
-            JIMENG_V4_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=120
-        )
+        print(f"[API] 调用即梦4.0 API: {JIMENG_V4_API_URL}")
         
-        if response.status_code != 200:
-            raise RuntimeError(f"即梦4.0 API调用失败: {response.status_code} - {response.text}")
+        # API调用带重试
+        last_exception = None
+        response = None
+        for attempt in range(4):  # 最多4次尝试
+            try:
+                response = requests.post(
+                    JIMENG_V4_API_URL,
+                    headers=headers,
+                    json=payload,
+                    timeout=60
+                )
+                if response.status_code == 200:
+                    break
+                elif response.status_code in [401, 403]:
+                    raise RuntimeError(f"即梦4.0 API认证失败: {response.status_code} - {response.text}")
+                elif response.status_code >= 500:
+                    if attempt < 3:
+                        delay = min(1 * (2 ** attempt), 4)
+                        print(f"[RETRY] 即梦4.0 API服务器错误 {response.status_code}，{delay} 秒后重试...")
+                        pytime.sleep(delay)
+                        continue
+                    else:
+                        raise RuntimeError(f"即梦4.0 API服务器错误（已重试3次）: {response.status_code} - {response.text}")
+                else:
+                    raise RuntimeError(f"即梦4.0 API调用失败: {response.status_code} - {response.text}")
+            except RETRYABLE_EXCEPTIONS as e:
+                last_exception = e
+                if attempt < 3:
+                    delay = min(1 * (2 ** attempt), 4)
+                    print(f"[RETRY] 即梦4.0 API网络错误，{delay} 秒后重试... ({type(e).__name__})")
+                    pytime.sleep(delay)
+                else:
+                    raise RuntimeError(f"即梦4.0 API网络请求失败（已重试3次）: {type(e).__name__}: {str(e)}") from e
+        
+        if not response or response.status_code != 200:
+            if last_exception:
+                raise last_exception
+            raise RuntimeError(f"即梦4.0 API调用失败: 未知错误")
         
         result = response.json()
+        print(f"[API] 即梦4.0 API响应成功")
         
         # 解析返回结果 - 根据实际API响应格式调整
         if "data" in result and len(result["data"]) > 0:
@@ -858,15 +996,13 @@ def call_jimeng_v4_api(original_abs_path, prompt):
         elif "image" in result:
             image_url = result["image"]
         else:
-            raise RuntimeError(f"即梦4.0 API返回格式异常: {result}")
+            raise RuntimeError(f"即梦4.0 API返回格式异常: 缺少图片数据")
         
-        # 获取图片数据
+        # 获取图片数据（带重试）
         image_data_bytes = None
         if image_url.startswith(("http://", "https://")):
-            img_response = requests.get(image_url, timeout=30)
-            if img_response.status_code != 200:
-                raise Exception(f"下载生成图片失败: {img_response.status_code}")
-            image_data_bytes = img_response.content
+            print(f"[DOWNLOAD] 开始下载生成的图片...")
+            image_data_bytes = download_image_with_retry(image_url, max_retries=3, timeout=30)
         elif image_url.startswith("data:image"):
             # base64 data URL
             if "," in image_url:
@@ -887,7 +1023,7 @@ def call_jimeng_v4_api(original_abs_path, prompt):
         os.makedirs(GENERATED_DIR, exist_ok=True)
         filename = f"dream_{uuid.uuid4().hex}.jpg"
         dest_path = os.path.join(GENERATED_DIR, filename)
-        
+
         quality = 85
         output = BytesIO()
         while True:
@@ -946,13 +1082,11 @@ def call_jimeng_api(original_abs_path, prompt):
         if not image_data:
             raise RuntimeError(f"即夢任務完成但無法取得圖像資料: {result_data}")
 
-        # 获取图片数据
+        # 获取图片数据（带重试）
         image_data_bytes = None
         if image_data.startswith(("http://", "https://")):
-            img_response = requests.get(image_data, timeout=30)
-            if img_response.status_code != 200:
-                raise Exception(f"下載生成圖片失敗: {img_response.status_code}")
-            image_data_bytes = img_response.content
+            print(f"[DOWNLOAD] 开始下载生成的图片...")
+            image_data_bytes = download_image_with_retry(image_data, max_retries=3, timeout=30)
         else:
             if "," in image_data:
                 image_data_clean = image_data.split(",")[1]
@@ -1511,24 +1645,56 @@ def api_generate_figure():
             dream_rel = call_jimeng_api(original_rel, prompt)
     except RuntimeError as e:
         error_msg = str(e)
-        # 如果是签名错误，返回更详细的错误信息
-        if "SignatureDoesNotMatch" in error_msg or "401" in error_msg:
+        error_type = type(e).__name__
+        
+        # 详细日志记录
+        print(f"[ERROR] API调用失败 - 类型: {error_type}, 消息: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        
+        # 分类错误类型
+        if "SignatureDoesNotMatch" in error_msg or "401" in error_msg or "认证失败" in error_msg:
             return jsonify({
                 "success": False,
-                "error": "API_SIGNATURE_ERROR",
-                "message": "API签名验证失败，请检查配置。"
+                "error": "API_AUTH_ERROR",
+                "message": "API认证失败，请检查配置。"
             }), 500
-        # 其他运行时错误
-        return jsonify({
-            "success": False,
-            "error": "API_CALL_FAILED",
-            "message": f"API调用失败: {error_msg}"
-        }), 500
+        elif "网络请求失败" in error_msg or "网络错误" in error_msg or "已重试" in error_msg:
+            return jsonify({
+                "success": False,
+                "error": "NETWORK_ERROR",
+                "message": "网络连接异常，请检查网络后重试。"
+            }), 500
+        elif "服务器错误" in error_msg or "500" in error_msg or "502" in error_msg or "503" in error_msg:
+            return jsonify({
+                "success": False,
+                "error": "SERVER_ERROR",
+                "message": "服务器繁忙，请稍后重试。"
+            }), 500
+        elif "超时" in error_msg or "timeout" in error_msg.lower() or "Timeout" in error_msg:
+            return jsonify({
+                "success": False,
+                "error": "TIMEOUT_ERROR",
+                "message": "请求超时，请检查网络后重试。"
+            }), 500
+        else:
+            # 其他运行时错误
+            return jsonify({
+                "success": False,
+                "error": "API_CALL_FAILED",
+                "message": "生成失败，请稍后重试。"
+            }), 500
     except Exception as exc:
+        error_type = type(exc).__name__
+        error_msg = str(exc)
+        print(f"[ERROR] 未知错误 - 类型: {error_type}, 消息: {error_msg}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             "success": False,
-            "error": "API_ERROR",
-            "message": f"生成图片时发生错误: {str(exc)}"
+            "error": "UNKNOWN_ERROR",
+            "message": "生成图片时发生错误，请稍后重试。"
         }), 500
     
     try:
