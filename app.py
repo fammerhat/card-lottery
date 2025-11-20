@@ -1491,6 +1491,7 @@ def admin_user_stats():
     user_ids = [u.user_id for u in users]
     card_counts = {}
     if user_ids:
+        # 找到每个用户每种卡的首次获得时间
         card_first_sub = (
             db.session.query(
                 UserCard.user_id.label("uid"),
@@ -1501,14 +1502,22 @@ def admin_user_stats():
             .subquery()
         )
 
-        card_query = db.session.query(
-            card_first_sub.c.uid, func.count().label("cnt")
-        ).filter(card_first_sub.c.uid.in_(user_ids))
+        # 统计每个用户在时间段内首次获得的卡的种类数（使用 distinct 确保每种卡只统计一次）
+        card_query = (
+            db.session.query(
+                card_first_sub.c.uid,
+                func.count(func.distinct(card_first_sub.c.cid)).label("cnt")
+            )
+            .filter(card_first_sub.c.uid.in_(user_ids))
+        )
 
         if day_start:
             card_query = card_query.filter(card_first_sub.c.first_obtained >= day_start)
         if day_end:
             card_query = card_query.filter(card_first_sub.c.first_obtained < day_end)
+
+        # 按用户分组统计
+        card_query = card_query.group_by(card_first_sub.c.uid)
 
         for uid, cnt in card_query.all():
             card_counts[uid] = cnt
