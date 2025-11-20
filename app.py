@@ -1594,7 +1594,6 @@ def api_generate_quota():
 @app.route("/api/generate-figure", methods=["POST"])
 def api_generate_figure():
     prompt = (request.form.get("prompt") or "").strip()
-    user_name = (request.form.get("user_name") or "").strip()
     image_file = request.files.get("image")
 
     if not prompt:
@@ -1685,7 +1684,7 @@ def api_generate_figure():
         }), 500
     
     try:
-        thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
+    thumbnail_rel = create_thumbnail(dream_rel, max_kb=120, max_size=(480, 480))
     except Exception as exc:
         return jsonify({
             "success": False,
@@ -1694,14 +1693,15 @@ def api_generate_figure():
         }), 500
 
     try:
-    record = GenerateRecord(
-        user_name=user_name or None,
-        prompt=prompt,
-        original_image_url=original_rel,
-        thumbnail_url=thumbnail_rel,
-        dream_image_url=dream_rel,
-        status="pending",
-    )
+        # 使用登录用户的真实姓名，而不是表单中的 user_name
+        record = GenerateRecord(
+            user_name=user.name if user else None,
+            prompt=prompt,
+            original_image_url=original_rel,
+            thumbnail_url=thumbnail_rel,
+            dream_image_url=dream_rel,
+            status="pending",
+        )
     db.session.add(record)
     db.session.commit()
     except Exception as exc:
