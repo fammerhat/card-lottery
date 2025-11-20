@@ -1090,22 +1090,11 @@
             });
             updateQuota();
           } else {
-            // 根据错误类型显示不同的提示
-            let errorMessage = "生成失败，请稍后重试。";
-            if (data.error === "NETWORK_ERROR") {
-              errorMessage = "网络连接异常，请检查网络后重试。";
-            } else if (data.error === "TIMEOUT_ERROR") {
-              errorMessage = "请求超时，请检查网络后重试。";
-            } else if (data.error === "SERVER_ERROR") {
-              errorMessage = "服务器繁忙，请稍后重试。";
-            } else if (data.message) {
-              errorMessage = data.message;
-            }
-            
+            // 统一错误提示
             appendMessage({
               type: "system",
               label: "提示",
-              text: errorMessage,
+              text: data.message || "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
             });
           }
         } else {
@@ -1132,20 +1121,11 @@
         console.error("生成请求失败:", error);
         progress.finish(false);
         
-        // 根据错误类型显示不同的提示
-        let errorMessage = "生成失败，请稍后重试。";
-        if (error.name === "AbortError") {
-          errorMessage = "请求超时，请检查网络后重试。";
-        } else if (error.name === "TypeError" && error.message.includes("fetch")) {
-          errorMessage = "网络连接异常，请检查网络后重试。";
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-        
+        // 统一错误提示
         appendMessage({
           type: "system",
           label: "提示",
-          text: errorMessage,
+          text: "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
         });
       } finally {
         resetGenerateInputs();

@@ -557,14 +557,14 @@ def _jimeng_make_request(action, payload_dict):
     scheme, host, path = _build_jimeng_request_components()
 
     query_items = [("Action", action)]
-    if JIMENG_VERSION:
-        query_items.append(("Version", JIMENG_VERSION))
+        if JIMENG_VERSION:
+            query_items.append(("Version", JIMENG_VERSION))
     query_string = urlencode(sorted(query_items))
 
-    headers = {
-        "Content-Type": "application/json",
-    }
-    
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
     authorization, x_date, payload_hash = generate_volcengine_signature(
             JIMENG_ACCESS_KEY,
             JIMENG_SECRET_KEY,
@@ -587,9 +587,9 @@ def _jimeng_make_request(action, payload_dict):
         }
     )
 
-    if query_string:
+        if query_string:
         url = f"{scheme}://{host}{path}?{query_string}"
-    else:
+        else:
         url = f"{scheme}://{host}{path}"
 
     # 调试日志（生产环境可移除）
@@ -598,14 +598,14 @@ def _jimeng_make_request(action, payload_dict):
     print(f"[DEBUG] Query: {query_string}")
     print(f"[DEBUG] Host: {host}")
 
-    response = requests.post(
+        response = requests.post(
         url,
-        headers=headers,
-        data=payload_json.encode("utf-8"),
+            headers=headers,
+            data=payload_json.encode("utf-8"),
         timeout=60,
-    )
+        )
 
-    if response.status_code != 200:
+        if response.status_code != 200:
         raise RuntimeError(f"即夢API調用失敗: {response.status_code} - {response.text}")
 
     body = response.json()
@@ -1037,7 +1037,7 @@ def call_jimeng_v4_api(original_abs_path, prompt):
                 break
             quality -= 5
         
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
         
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1117,7 +1117,7 @@ def call_jimeng_api(original_abs_path, prompt):
                 break
             quality -= 5
         
-        with open(dest_path, "wb") as f:
+            with open(dest_path, "wb") as f:
             f.write(output.getvalue())
 
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
@@ -1642,7 +1642,11 @@ def api_generate_figure():
             image_file, ORIGINAL_DIR, "origin", max_kb=100, max_size=(768, 768)
         )
     except Exception as exc:  # pylint: disable=broad-except
-        return jsonify({"success": False, "error": "IMAGE_PROCESS_FAIL", "detail": str(exc)}), 500
+        return jsonify({
+            "success": False,
+            "error": "IMAGE_PROCESS_FAIL",
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+        }), 500
 
     # 調用AI生成圖片（根据配置选择：Aihubmix > 即梦4.0 > 即梦3.0）
     try:
@@ -1651,7 +1655,7 @@ def api_generate_figure():
         elif USE_JIMENG_V4:
             dream_rel = call_jimeng_v4_api(original_rel, prompt)
         else:
-            dream_rel = call_jimeng_api(original_rel, prompt)
+    dream_rel = call_jimeng_api(original_rel, prompt)
     except RuntimeError as e:
         error_msg = str(e)
         error_type = type(e).__name__
@@ -1661,38 +1665,12 @@ def api_generate_figure():
         import traceback
         traceback.print_exc()
         
-        # 分类错误类型
-        if "SignatureDoesNotMatch" in error_msg or "401" in error_msg or "认证失败" in error_msg:
-            return jsonify({
-                "success": False,
-                "error": "API_AUTH_ERROR",
-                "message": "API认证失败，请检查配置。"
-            }), 500
-        elif "网络请求失败" in error_msg or "网络错误" in error_msg or "已重试" in error_msg:
-            return jsonify({
-                "success": False,
-                "error": "NETWORK_ERROR",
-                "message": "网络连接异常，请检查网络后重试。"
-            }), 500
-        elif "服务器错误" in error_msg or "500" in error_msg or "502" in error_msg or "503" in error_msg:
-            return jsonify({
-                "success": False,
-                "error": "SERVER_ERROR",
-                "message": "服务器繁忙，请稍后重试。"
-            }), 500
-        elif "超时" in error_msg or "timeout" in error_msg.lower() or "Timeout" in error_msg:
-            return jsonify({
-                "success": False,
-                "error": "TIMEOUT_ERROR",
-                "message": "请求超时，请检查网络后重试。"
-            }), 500
-        else:
-            # 其他运行时错误
-            return jsonify({
-                "success": False,
-                "error": "API_CALL_FAILED",
-                "message": "生成失败，请稍后重试。"
-            }), 500
+        # 统一错误提示
+        return jsonify({
+            "success": False,
+            "error": "API_CALL_FAILED",
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
+        }), 500
     except Exception as exc:
         error_type = type(exc).__name__
         error_msg = str(exc)
@@ -1703,7 +1681,7 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "UNKNOWN_ERROR",
-            "message": "生成图片时发生错误，请稍后重试。"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
         }), 500
     
     try:
@@ -1712,26 +1690,26 @@ def api_generate_figure():
         return jsonify({
             "success": False,
             "error": "THUMBNAIL_FAIL",
-            "message": f"创建缩略图失败: {str(exc)}"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
         }), 500
 
     try:
-        record = GenerateRecord(
-            user_name=user_name or None,
-            prompt=prompt,
-            original_image_url=original_rel,
-            thumbnail_url=thumbnail_rel,
-            dream_image_url=dream_rel,
-            status="pending",
-        )
-        db.session.add(record)
-        db.session.commit()
+    record = GenerateRecord(
+        user_name=user_name or None,
+        prompt=prompt,
+        original_image_url=original_rel,
+        thumbnail_url=thumbnail_rel,
+        dream_image_url=dream_rel,
+        status="pending",
+    )
+    db.session.add(record)
+    db.session.commit()
     except Exception as exc:
         db.session.rollback()
         return jsonify({
             "success": False,
             "error": "DB_ERROR",
-            "message": f"保存记录失败: {str(exc)}"
+            "message": "参与人过多，免费服务器带宽不足，麻烦重新加载试试"
         }), 500
 
     return jsonify(
