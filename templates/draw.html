@@ -112,6 +112,9 @@
     }
     .team-rank-item {
       margin-bottom: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     .team-rank-item:last-child {
       margin-bottom: 0;
@@ -364,10 +367,13 @@
             <div class="team-rank-label">战队排名</div>
             <div class="team-rank-value rank" id="teamRank">{{ team_info.rank }}</div>
           </div>
-        </div>
-        
-        <div class="team-rank-diff" id="cardsToCatchUpWrapper" style="display:{% if team_info.rank > 1 %}block{% else %}none{% endif %};">
-          比前1名少<span class="rank-number" id="cardsToCatchUp">{% if team_info.rank > 1 %}{{ team_info.cards_to_catch_up }}{% else %}0{% endif %}</span>张财神卡
+          
+          <div class="team-rank-item" id="cardsToCatchUpWrapper" style="display:{% if team_info.rank > 1 %}flex{% else %}none{% endif %};">
+            <div class="team-rank-label">比前1名少</div>
+            <div class="team-rank-value">
+              <span class="rank-number" id="cardsToCatchUp">{% if team_info.rank > 1 %}{{ team_info.cards_to_catch_up }}{% else %}0{% endif %}</span>张财神卡
+            </div>
+          </div>
         </div>
         
         <div class="team-rank-row">
@@ -668,7 +674,7 @@
               // 更新距离前一名需要的卡数
               if (cardsToCatchUpWrapper && cardsToCatchUpEl) {
                 if (info.rank > 1) {
-                  cardsToCatchUpWrapper.style.display = "block";
+                  cardsToCatchUpWrapper.style.display = "flex";
                   cardsToCatchUpEl.textContent = info.cards_to_catch_up;
                 } else {
                   cardsToCatchUpWrapper.style.display = "none";
