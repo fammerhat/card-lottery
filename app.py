@@ -40,9 +40,22 @@ app = Flask(__name__)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(BASE_DIR, "lottery.db")
 
-app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+# 数据库配置：优先使用 PostgreSQL（Render），如果没有则使用 SQLite（本地开发）
+database_url = os.getenv("DATABASE_URL")
+if database_url:
+    # Render PostgreSQL 连接字符串格式：postgresql://user:password@host:port/dbname
+    # 需要将 postgres:// 转换为 postgresql://（某些旧版本使用 postgres://）
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    print(f"[INFO] 使用 PostgreSQL 数据库")
+else:
+    # 本地开发使用 SQLite
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    print(f"[INFO] 使用 SQLite 数据库: {db_path}")
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SECRET_KEY"] = "change_this_to_random_string"
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "change_this_to_random_string")
 
 # 7 天免登录
 app.permanent_session_lifetime = timedelta(days=7)
@@ -563,21 +576,21 @@ def _jimeng_make_request(action, payload_dict):
 
     headers = {
         "Content-Type": "application/json",
-    }
-    
+        }
+        
     authorization, x_date, payload_hash = generate_volcengine_signature(
-        JIMENG_ACCESS_KEY,
-        JIMENG_SECRET_KEY,
-        "POST",
-        JIMENG_SERVICE,
-        JIMENG_REGION,
-        host,
-        path,
-        query_string,
-        headers,
+            JIMENG_ACCESS_KEY,
+            JIMENG_SECRET_KEY,
+            "POST",
+            JIMENG_SERVICE,
+            JIMENG_REGION,
+            host,
+            path,
+            query_string,
+            headers,
         payload_json,
-    )
-    
+        )
+        
     headers.update(
         {
             "Authorization": authorization,
@@ -600,10 +613,10 @@ def _jimeng_make_request(action, payload_dict):
 
     response = requests.post(
         url,
-        headers=headers,
-        data=payload_json.encode("utf-8"),
+            headers=headers,
+            data=payload_json.encode("utf-8"),
         timeout=60,
-    )
+        )
 
     if response.status_code != 200:
         raise RuntimeError(f"即夢API調用失敗: {response.status_code} - {response.text}")
@@ -1701,7 +1714,7 @@ def api_generate_figure():
             thumbnail_url=thumbnail_rel,
             dream_image_url=dream_rel,
             status="pending",
-        )
+    )
         db.session.add(record)
         db.session.commit()
     except Exception as exc:

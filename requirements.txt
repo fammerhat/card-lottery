@@ -3,3 +3,4 @@ flask_sqlalchemy
 gunicorn
 Pillow
 requests
+psycopg2-binary
