@@ -82,6 +82,9 @@ for folder in (ORIGINAL_DIR, GENERATED_DIR, THUMB_DIR):
 ADMIN_USERNAME = "robot"
 ADMIN_PASSWORD = "cs168"
 
+# 维护模式：通过环境变量控制，设置为 "true" 时启用维护模式
+MAINTENANCE_MODE = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
+
 # 固定战队列表
 TEAM_CHOICES = ["青龙战队", "白虎战队", "朱雀战队", "玄武战队", "黄龙战队"]
 
@@ -1256,6 +1259,27 @@ def create_thumbnail(source_rel_path, max_kb=120, max_size=(512, 512)):
     rel_path = abs_path.replace(BASE_DIR + os.sep, "")
     rel_path = rel_path.replace("\\", "/")
     return "/" + rel_path
+
+
+# --- 维护模式拦截 ---
+@app.before_request
+def check_maintenance():
+    """维护模式：拦截所有请求，但允许管理员后台和健康检查"""
+    if MAINTENANCE_MODE:
+        # 允许管理员后台访问
+        if request.path.startswith("/admin"):
+            return None  # 继续处理请求
+        
+        # 允许健康检查路径（Render 等平台会检查这些路径）
+        if request.path in ["/health", "/ping", "/healthz"]:
+            return jsonify({"status": "ok", "maintenance": True}), 200
+        
+        # 允许静态资源访问（CSS、JS、图片等）
+        if request.path.startswith("/static"):
+            return None  # 继续处理请求
+        
+        # 其他所有请求返回维护页面
+        return render_template("maintenance.html"), 503
 
 
 # --- 使用者登录 / 登出（前台） ---
