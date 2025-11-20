@@ -63,8 +63,9 @@ app.permanent_session_lifetime = timedelta(days=7)
 
 db = SQLAlchemy(app)
 
-# 只展示這個時間點之後審核通過的生成結果
-GALLERY_APPROVED_SINCE = datetime.utcnow()
+# 只展示 2025-11-20 21:00 (北京) 之後審核通過的生成結果
+# 北京時間 2025/11/20 21:00 對應 UTC 2025/11/20 13:00
+GALLERY_APPROVED_SINCE = datetime(2025, 11, 20, 13, 0, 0)
 
 # 圖片儲存路徑
 UPLOAD_BASE = os.path.join(BASE_DIR, "static", "uploads")
