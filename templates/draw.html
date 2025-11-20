@@ -474,12 +474,12 @@
     };
 
     const CARD_IMAGES = {
-      1: "{{ url_for('static', filename='cards/card1.png') }}",
-      2: "{{ url_for('static', filename='cards/card2.png') }}",
-      3: "{{ url_for('static', filename='cards/card3.png') }}",
-      4: "{{ url_for('static', filename='cards/card4.png') }}",
-      5: "{{ url_for('static', filename='cards/card5.png') }}",
-      6: "{{ url_for('static', filename='cards/card6.png') }}"
+      1: "{{ url_for('serve_card_image', filename='card1.png') }}",
+      2: "{{ url_for('serve_card_image', filename='card2.png') }}",
+      3: "{{ url_for('serve_card_image', filename='card3.png') }}",
+      4: "{{ url_for('serve_card_image', filename='card4.png') }}",
+      5: "{{ url_for('serve_card_image', filename='card5.png') }}",
+      6: "{{ url_for('serve_card_image', filename='card6.png') }}"
     };
 
     // 一进抽卡页就预载全部卡片图片

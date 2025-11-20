@@ -757,16 +757,33 @@ def call_aihubmix_api(original_abs_path, prompt):
             raise RuntimeError(f"Aihubmix API返回格式异常: {result}")
         
         # 下载生成的圖片
-        os.makedirs(GENERATED_DIR, exist_ok=True)
-        filename = f"dream_{uuid.uuid4().hex}.jpg"
-        dest_path = os.path.join(GENERATED_DIR, filename)
-        
         img_response = requests.get(image_url, timeout=60)
         if img_response.status_code != 200:
             raise Exception(f"下载生成图片失败: {img_response.status_code}")
         
+        # 压缩图片到50KB以下
+        image = Image.open(BytesIO(img_response.content))
+        image = image.convert("RGB")
+        # 限制最大尺寸为1024x1024
+        image.thumbnail((1024, 1024), Image.LANCZOS)
+        
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+        
+        quality = 85
+        output = BytesIO()
+        while True:
+            output.seek(0)
+            output.truncate(0)
+            image.save(output, format="JPEG", quality=quality, optimize=True)
+            size_kb = output.tell() / 1024
+            if size_kb <= 50 or quality <= 35:
+                break
+            quality -= 5
+        
         with open(dest_path, "wb") as f:
-            f.write(img_response.content)
+            f.write(output.getvalue())
         
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
         rel_path = rel_path.replace("\\", "/")
@@ -843,31 +860,47 @@ def call_jimeng_v4_api(original_abs_path, prompt):
         else:
             raise RuntimeError(f"即梦4.0 API返回格式异常: {result}")
         
-        # 保存生成的圖片
-        os.makedirs(GENERATED_DIR, exist_ok=True)
-        filename = f"dream_{uuid.uuid4().hex}.jpg"
-        dest_path = os.path.join(GENERATED_DIR, filename)
-        
+        # 获取图片数据
+        image_data_bytes = None
         if image_url.startswith(("http://", "https://")):
             img_response = requests.get(image_url, timeout=30)
             if img_response.status_code != 200:
                 raise Exception(f"下载生成图片失败: {img_response.status_code}")
-            with open(dest_path, "wb") as f:
-                f.write(img_response.content)
+            image_data_bytes = img_response.content
         elif image_url.startswith("data:image"):
             # base64 data URL
             if "," in image_url:
                 image_data = image_url.split(",")[1]
             else:
                 image_data = image_url
-            image_bytes = base64.b64decode(image_data)
-            with open(dest_path, "wb") as f:
-                f.write(image_bytes)
+            image_data_bytes = base64.b64decode(image_data)
         else:
             # 直接是base64字符串
-            image_bytes = base64.b64decode(image_url)
-            with open(dest_path, "wb") as f:
-                f.write(image_bytes)
+            image_data_bytes = base64.b64decode(image_url)
+        
+        # 压缩图片到50KB以下
+        image = Image.open(BytesIO(image_data_bytes))
+        image = image.convert("RGB")
+        # 限制最大尺寸为1024x1024
+        image.thumbnail((1024, 1024), Image.LANCZOS)
+        
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+        
+        quality = 85
+        output = BytesIO()
+        while True:
+            output.seek(0)
+            output.truncate(0)
+            image.save(output, format="JPEG", quality=quality, optimize=True)
+            size_kb = output.tell() / 1024
+            if size_kb <= 50 or quality <= 35:
+                break
+            quality -= 5
+        
+        with open(dest_path, "wb") as f:
+            f.write(output.getvalue())
         
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
         rel_path = rel_path.replace("\\", "/")
@@ -913,23 +946,43 @@ def call_jimeng_api(original_abs_path, prompt):
         if not image_data:
             raise RuntimeError(f"即夢任務完成但無法取得圖像資料: {result_data}")
 
-        # 保存生成的圖片
-        os.makedirs(GENERATED_DIR, exist_ok=True)
-        filename = f"dream_{uuid.uuid4().hex}.jpg"
-        dest_path = os.path.join(GENERATED_DIR, filename)
-
+        # 获取图片数据
+        image_data_bytes = None
         if image_data.startswith(("http://", "https://")):
             img_response = requests.get(image_data, timeout=30)
             if img_response.status_code != 200:
                 raise Exception(f"下載生成圖片失敗: {img_response.status_code}")
-            with open(dest_path, "wb") as f:
-                f.write(img_response.content)
+            image_data_bytes = img_response.content
         else:
             if "," in image_data:
-                image_data = image_data.split(",")[1]
-            image_bytes = base64.b64decode(image_data)
-            with open(dest_path, "wb") as f:
-                f.write(image_bytes)
+                image_data_clean = image_data.split(",")[1]
+            else:
+                image_data_clean = image_data
+            image_data_bytes = base64.b64decode(image_data_clean)
+        
+        # 压缩图片到50KB以下
+        image = Image.open(BytesIO(image_data_bytes))
+        image = image.convert("RGB")
+        # 限制最大尺寸为1024x1024
+        image.thumbnail((1024, 1024), Image.LANCZOS)
+        
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"dream_{uuid.uuid4().hex}.jpg"
+        dest_path = os.path.join(GENERATED_DIR, filename)
+        
+        quality = 85
+        output = BytesIO()
+        while True:
+            output.seek(0)
+            output.truncate(0)
+            image.save(output, format="JPEG", quality=quality, optimize=True)
+            size_kb = output.tell() / 1024
+            if size_kb <= 50 or quality <= 35:
+                break
+            quality -= 5
+        
+        with open(dest_path, "wb") as f:
+            f.write(output.getvalue())
 
         rel_path = dest_path.replace(BASE_DIR + os.sep, "")
         rel_path = rel_path.replace("\\", "/")
@@ -1200,6 +1253,45 @@ def draw_card_by_weight():
     card_ids = [cid for cid, _ in CARD_WEIGHTS]
     weights = [w for _, w in CARD_WEIGHTS]
     return random.choices(card_ids, weights=weights, k=1)[0]
+
+
+@app.route("/static/cards/<filename>")
+def serve_card_image(filename):
+    """动态压缩并返回卡片图片，确保小于50KB"""
+    card_path = os.path.join(BASE_DIR, "static", "cards", filename)
+    if not os.path.exists(card_path):
+        return Response("Not Found", status=404)
+    
+    try:
+        # 打开图片
+        image = Image.open(card_path)
+        image = image.convert("RGB")
+        # 限制最大尺寸为800x800
+        image.thumbnail((800, 800), Image.LANCZOS)
+        
+        # 压缩到50KB以下
+        quality = 85
+        output = BytesIO()
+        while True:
+            output.seek(0)
+            output.truncate(0)
+            image.save(output, format="JPEG", quality=quality, optimize=True)
+            size_kb = output.tell() / 1024
+            if size_kb <= 50 or quality <= 35:
+                break
+            quality -= 5
+        
+        output.seek(0)
+        return Response(
+            output.getvalue(),
+            mimetype="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+    except Exception as exc:
+        print(f"压缩卡片图片失败: {exc}")
+        # 如果压缩失败，返回原图
+        with open(card_path, "rb") as f:
+            return Response(f.read(), mimetype="image/png")
 
 
 @app.route("/api/draw", methods=["POST"])
