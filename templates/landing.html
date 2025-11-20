@@ -612,11 +612,11 @@
     </div>
 
     <div class="tips-section">
-      <div class="tip-item">1、每日审核1-2次刷新财神卡次数，当天会进行一次红包下发</div>
+      <div class="tip-item">1、每日审核1-2次刷新财神卡次数，可以先邀请好友入群，积累一定次数再抽卡，效率更高</div>
       <div class="tip-item">2、登记的好友同时在多个群，不计算战队成绩内，请提前确认好友是否加入其他战队（抢人大战）</div>
-      <div class="tip-item">3、入群后请修改群内名称，同钉钉群内名称一致，便于红包下发</div>
+      <div class="tip-item">3、入群后请将群昵称改为真实姓名</div>
       <div class="tip-item">4、每个人生成5次财神即可，比如抽中东路财神，就生成东路财神形象，重复的财神生成无用</div>
-      <div class="tip-item">5、活动截止时间11月24日17点，统计战队排名（财神卡总数）并下发红包</div>
+      <div class="tip-item">5、活动截止时间11月24日17点，统计战队排名（财神卡总数）</div>
     </div>
   </div>
 
@@ -1084,96 +1084,123 @@
       sendBtn.disabled = true;
       sendBtn.style.opacity = "0.6";
       sendBtn.style.cursor = "not-allowed";
-
-      clearPlaceholder();
-
-      const previewUrl = getCurrentPreviewUrl();
-
-      appendMessage({
-        type: "user",
-        label: isRetry ? "重新生成" : "我的口令",
-        text: promptText,
-        imageUrl: previewUrl || lastPreviewUrl || null,
-      });
-
-      const statusMsg = appendMessage({
-        type: "system",
-        label: "系统",
-        text: "",
-      }, false); // 不保存进度条消息到历史记录
-      const progress = startProgress(statusMsg);
-
-      const formData = new FormData();
-      formData.append("prompt", promptText);
-      formData.append("image", fileToUse);
-
-      // 创建AbortController用于超时控制
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 90000); // 90秒超时
+      let progress = null;
+      let statusMsg = null;
+      let requestInFlight = false;
 
       try {
-        const resp = await fetch("/api/generate-figure", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
+        clearPlaceholder();
+
+        const previewUrl = getCurrentPreviewUrl();
+
+        appendMessage({
+          type: "user",
+          label: isRetry ? "重新生成" : "我的口令",
+          text: promptText,
+          imageUrl: previewUrl || lastPreviewUrl || null,
         });
-        
-        clearTimeout(timeoutId);
-        const data = await resp.json();
-        
-        if (!resp.ok || !data.success) {
-          progress.finish(false);
-          if (data.error === "QUOTA_EXCEEDED") {
-            appendMessage({
-              type: "system",
-              label: "提示",
-              text: data.message || "您今天的生成额度已用完，明天再来！",
-            });
-            updateQuota();
-          } else {
-            // 统一错误提示
-            appendMessage({
-              type: "system",
-              label: "提示",
-              text: data.message || "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
-            });
-          }
-        } else {
-          progress.finish(true);
-          lastPrompt = promptText;
-          lastFile = fileToUse;
-          lastPreviewUrl = previewUrl;
-          const resultMsg = appendMessage({
-            type: "ai",
-            label: "财神助手",
-            text: "这是你的财神手办，长按图片保存！",
-            imageUrl: data.dream_image_url || data.thumbnail_url,
-            showSaveHint: true,
+
+        statusMsg = appendMessage({
+          type: "system",
+          label: "系统",
+          text: "",
+        }, false); // 不保存进度条消息到历史记录
+        progress = startProgress(statusMsg);
+
+        const formData = new FormData();
+        formData.append("prompt", promptText);
+        formData.append("image", fileToUse);
+
+        // 创建AbortController用于超时控制
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 90000); // 90秒超时
+
+        requestInFlight = true;
+        try {
+          const resp = await fetch("/api/generate-figure", {
+            method: "POST",
+            body: formData,
+            signal: controller.signal,
           });
-          // 更新配额显示
-          updateQuota();
-          // 滚动到生成结果
-          setTimeout(() => {
-            resultMsg.scrollIntoView({ behavior: "smooth", block: "end" });
-          }, 100);
+          
+          clearTimeout(timeoutId);
+          const data = await resp.json();
+          
+          if (!resp.ok || !data.success) {
+            progress.finish(false);
+            if (data.error === "QUOTA_EXCEEDED") {
+              appendMessage({
+                type: "system",
+                label: "提示",
+                text: data.message || "您今天的生成额度已用完，明天再来！",
+              });
+              updateQuota();
+            } else {
+              // 统一错误提示
+              appendMessage({
+                type: "system",
+                label: "提示",
+                text: data.message || "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+              });
+            }
+          } else {
+            progress.finish(true);
+            lastPrompt = promptText;
+            lastFile = fileToUse;
+            lastPreviewUrl = previewUrl;
+            const resultMsg = appendMessage({
+              type: "ai",
+              label: "财神助手",
+              text: "这是你的财神手办，长按图片保存！",
+              imageUrl: data.dream_image_url || data.thumbnail_url,
+              showSaveHint: true,
+            });
+            // 更新配额显示
+            updateQuota();
+            // 滚动到生成结果
+            setTimeout(() => {
+              resultMsg.scrollIntoView({ behavior: "smooth", block: "end" });
+            }, 100);
+          }
+        } catch (error) {
+          clearTimeout(timeoutId);
+          console.error("生成请求失败:", error);
+          if (progress) {
+            progress.finish(false);
+          }
+          
+          // 统一错误提示
+          appendMessage({
+            type: "system",
+            label: "提示",
+            text: "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+          });
+        } finally {
+          requestInFlight = false;
+          resetGenerateInputs();
+          // 恢复按钮状态（配额检查）
+          validateSendButton();
         }
       } catch (error) {
-        clearTimeout(timeoutId);
-        console.error("生成请求失败:", error);
-        progress.finish(false);
-        
-        // 统一错误提示
+        console.error("生成流程出现异常:", error);
+        if (progress) {
+          progress.finish(false);
+        } else if (statusMsg && statusMsg.parentNode) {
+          statusMsg.parentNode.removeChild(statusMsg);
+        }
         appendMessage({
           type: "system",
           label: "提示",
-          text: "参与人过多，免费服务器带宽不足，麻烦重新加载试试",
+          text: "生成流程出现异常，请刷新后重试",
         });
-      } finally {
-        resetGenerateInputs();
-        // 恢复按钮状态（配额检查）
-        validateSendButton();
+        if (!requestInFlight) {
+          // 如果请求尚未发出，手动恢复按钮状态（保留用户输入，便于再次尝试）
+          sendBtn.disabled = false;
+          sendBtn.style.opacity = "1";
+          sendBtn.style.cursor = "pointer";
+        }
       }
     }
 

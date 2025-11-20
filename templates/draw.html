@@ -210,6 +210,11 @@
       cursor: default;
       box-shadow: none;
     }
+    .button.no-times {
+      background: rgba(148, 163, 184, 0.4);
+      color: rgba(15, 23, 42, 0.8);
+      box-shadow: none;
+    }
     .button:active:enabled {
       transform: translateY(1px);
     }
@@ -385,7 +390,7 @@
         {% endif %}
         
         <div class="team-rank-hint">
-          每个整点根据战队财神卡数量更新排名（数量相同则看抽卡次数），每天下午6点结算当日排名，当日排名前进1名以上有额外奖励。
+          若每日排名对比前一日前进 1 名，当日群内每人可瓜分 50 元。
         </div>
       </div>
       {% endif %}
@@ -408,13 +413,13 @@
 
         <button
           id="drawButton"
-          class="button"
-          {% if remaining <= 0 %}disabled{% endif %}
+          class="button {% if remaining <= 0 %}no-times{% endif %}"
+          data-out-of-times="{% if remaining <= 0 %}true{% else %}false{% endif %}"
         >
           {% if remaining > 0 %}
           开始抽卡
           {% else %}
-          抽卡次数用完啦，快去邀人加次数
+          抽卡次数用完啦，去邀人进战队群加次数
           {% endif %}
         </button>
       </div>
@@ -531,8 +536,28 @@
       }
     }
 
+    function setOutOfTimesState(isOut) {
+      if (!drawButton) return;
+      if (isOut) {
+        drawButton.dataset.outOfTimes = "true";
+        drawButton.classList.add("no-times");
+        drawButton.textContent = "抽卡次数用完啦，去邀人进战队群加次数";
+      } else {
+        drawButton.dataset.outOfTimes = "false";
+        drawButton.classList.remove("no-times");
+        drawButton.textContent = "开始抽卡";
+      }
+    }
+
     async function handleDraw() {
-      if (!drawButton || drawButton.disabled) return;
+      if (!drawButton) return;
+
+      if (drawButton.dataset.outOfTimes === "true") {
+        window.open("https://v.wjx.cn/vm/OPVi0CD.aspx#", "_blank");
+        return;
+      }
+
+      if (drawButton.disabled) return;
 
       drawButton.disabled = true;
       showLoadingOverlay(true);
@@ -557,11 +582,11 @@
         if (!data.success) {
           modalQueue.length = 0;
           if (data.error === "NO_TIMES") {
-            drawButton.disabled = true;
-            drawButton.textContent = "抽卡次数用完啦，快去邀人加次数";
+            drawButton.disabled = false;
+            setOutOfTimesState(true);
             modalQueue.push({
               title: "提示",
-              text: "抽卡次数用完啦，快去邀人加次数！",
+              text: "抽卡次数用完啦，去邀人进战队群加次数！",
               imgUrl: ""
             });
           } else if (data.error === "NOT_LOGIN") {
@@ -586,11 +611,11 @@
         consumedEl.textContent = data.consumed;
 
         if (data.remaining <= 0) {
-          drawButton.disabled = true;
-          drawButton.textContent = "抽卡次数用完啦，快去邀人加次数";
+          drawButton.disabled = false;
+          setOutOfTimesState(true);
         } else {
           drawButton.disabled = false;
-          drawButton.textContent = "開始抽卡";
+          setOutOfTimesState(false);
         }
 
         // 更新已拥有卡图片
@@ -635,6 +660,10 @@
         const remaining = parseInt(remainingEl.textContent || "0", 10);
         if (remaining > 0) {
           drawButton.disabled = false;
+          setOutOfTimesState(false);
+        } else {
+          drawButton.disabled = false;
+          setOutOfTimesState(true);
         }
       }
     }
