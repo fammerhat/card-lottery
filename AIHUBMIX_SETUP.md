@@ -25,8 +25,7 @@ Aihubmix 是一个统一的 AI API 网关，支持多种图片生成模型，包
 
    **变量1：**
    - Key: `AIHUBMIX_API_TOKEN`
-   - Value: 你从 Aihubmix 控制台复制的 API Token
-   - 示例：`sk-abc123def456ghi789`
+   - Value: `sk-soVHnpDCGf10o0wq61B6E33fCa3448Cb97Fc0a2b73782b21`
 
    **变量2：**
    - Key: `USE_AIHUBMIX`
