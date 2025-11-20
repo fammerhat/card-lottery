@@ -800,9 +800,18 @@
         validateSendButton();
       });
     }
+    function resetChatMessagesView() {
+      chatMessages.innerHTML = "";
+      historyLoaded = false;
+      pendingUserMessage = null;
+      pendingUserMessageEl = null;
+      ensureChatPlaceholder();
+    }
+
     function closeDialog() {
       dialogOverlay.style.display = "none";
       document.body.style.overflow = "";
+      resetChatMessagesView();
     }
     openGeneratorBtn.addEventListener("click", openDialog);
     
