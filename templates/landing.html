@@ -924,7 +924,7 @@
       validateSendButton();
     }
 
-    ensureChatPlaceholder();
+    // 初始化时不显示placeholder，等打开对话框时再恢复历史记录
     validateSendButton(); // 初始化按钮状态
 
     function getCurrentPreviewUrl() {
