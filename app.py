@@ -67,6 +67,9 @@ db = SQLAlchemy(app)
 # 北京時間 2025/11/20 21:00 對應 UTC 2025/11/20 13:00
 GALLERY_APPROVED_SINCE = datetime(2025, 11, 20, 13, 0, 0)
 
+# 後台每頁顯示的使用者數量
+ADMIN_USERS_PER_PAGE = int(os.getenv("ADMIN_USERS_PER_PAGE", "20"))
+
 # 圖片儲存路徑
 UPLOAD_BASE = os.path.join(BASE_DIR, "static", "uploads")
 ORIGINAL_DIR = os.path.join(UPLOAD_BASE, "originals")
@@ -412,6 +415,22 @@ def log_admin_action(admin_name: str, action: str):
     log = AdminLog(admin_name=admin_name, action=action)
     db.session.add(log)
     db.session.commit()
+
+
+def admin_redirect_params():
+    """保留 team / page 參數以便操作後返回列表原頁"""
+    params = {}
+    team_arg = request.args.get("team")
+    if team_arg:
+        params["team"] = team_arg
+    page_arg = request.args.get("page")
+    if page_arg:
+        try:
+            int(page_arg)
+            params["page"] = page_arg
+        except (TypeError, ValueError):
+            pass
+    return params
 
 
 def get_today_chat_date():
@@ -2057,12 +2076,29 @@ def admin_users():
         return need_login
 
     team_filter = request.args.get("team") or ""
-    query = User.query
+    try:
+        page = int(request.args.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+    page = max(page, 1)
+    per_page = ADMIN_USERS_PER_PAGE
 
+    query = User.query
     if team_filter:
         query = query.filter(User.team == team_filter)
 
-    users = query.order_by(User.user_id.asc()).all()
+    total_users = query.count()
+    total_pages = max(1, (total_users + per_page - 1) // per_page) if total_users else 1
+    if total_users and page > total_pages:
+        page = total_pages
+
+    offset = (page - 1) * per_page
+    users = (
+        query.order_by(User.user_id.asc())
+        .offset(offset)
+        .limit(per_page)
+        .all()
+    )
 
     users_data = []
     for u in users:
@@ -2089,6 +2125,12 @@ def admin_users():
         users=users_data,
         team_filter=team_filter,
         team_choices=TEAM_CHOICES,
+        page=page,
+        per_page=per_page,
+        total_users=total_users,
+        total_pages=total_pages if total_users else 1,
+        has_prev=page > 1,
+        has_next=page < total_pages if total_users else False,
     )
 
 
@@ -2262,7 +2304,7 @@ def admin_edit_user(user_id):
         f"edit_user user_id={user.user_id}, before=({old_snapshot}), after=({new_snapshot})",
     )
 
-    return redirect(url_for("admin_users", team=request.args.get("team") or ""))
+    return redirect(url_for("admin_users", **admin_redirect_params()))
 
 
 @app.route("/admin/user/<int:user_id>/add_draws", methods=["POST"])
@@ -2280,7 +2322,7 @@ def admin_add_draws(user_id):
         delta = 0
 
     if delta <= 0 or delta > 100:
-        return redirect(url_for("admin_users", team=request.args.get("team") or ""))
+        return redirect(url_for("admin_users", **admin_redirect_params()))
 
     old_remaining = user.remaining_draws
     user.remaining_draws += delta
@@ -2292,7 +2334,7 @@ def admin_add_draws(user_id):
         f"add_draws user_id={user.user_id}, delta={delta}, before_remaining={old_remaining}, after_remaining={user.remaining_draws}",
     )
 
-    return redirect(url_for("admin_users", team=request.args.get("team") or ""))
+    return redirect(url_for("admin_users", **admin_redirect_params()))
 
 
 @app.route("/admin/user/<int:user_id>/delete", methods=["POST"])
@@ -2319,7 +2361,7 @@ def admin_delete_user(user_id):
     db.session.delete(user)
     db.session.commit()
 
-    return redirect(url_for("admin_users", team=request.args.get("team") or ""))
+    return redirect(url_for("admin_users", **admin_redirect_params()))
 
 
 @app.route("/admin/generates")

@@ -91,6 +91,10 @@
       background: #1d4ed8;
       border-color: #2563eb;
     }
+    .btn.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
     .btn.small {
       padding: 2px 6px;
       font-size: 11px;
@@ -139,6 +143,19 @@
     form.inline {
       display: inline-block;
       margin: 0;
+    }
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      padding-top: 10px;
+      border-top: 1px solid #1f2937;
+      font-size: 12px;
+    }
+    .pagination-buttons {
+      display: flex;
+      gap: 8px;
     }
   </style>
 </head>
@@ -208,7 +225,7 @@
               <form
                 class="inline"
                 method="post"
-                action="{{ url_for('admin_edit_user', user_id=u.user_id, team=team_filter) }}"
+                action="{{ url_for('admin_edit_user', user_id=u.user_id, team=team_filter, page=page) }}"
               >
                 <input
                   class="input-small"
@@ -255,7 +272,7 @@
               <form
                 class="inline"
                 method="post"
-                action="{{ url_for('admin_add_draws', user_id=u.user_id, team=team_filter) }}"
+                action="{{ url_for('admin_add_draws', user_id=u.user_id, team=team_filter, page=page) }}"
               >
                 <input
                   class="input-small"
@@ -284,7 +301,7 @@
               <form
                 class="inline"
                 method="post"
-                action="{{ url_for('admin_delete_user', user_id=u.user_id, team=team_filter) }}"
+                action="{{ url_for('admin_delete_user', user_id=u.user_id, team=team_filter, page=page) }}"
                 onsubmit="return confirm('确认删除用户 {{ u.name }} 吗？此操作无法恢复。');"
               >
                 <button class="btn small" type="submit" style="border-color:#b91c1c; background:#b91c1c;">
@@ -296,6 +313,24 @@
           {% endfor %}
         </tbody>
       </table>
+      <div class="pagination">
+        <div>
+          共 {{ total_users }} 位用户，当前第 {{ page }} / {{ total_pages }} 页
+        </div>
+        <div class="pagination-buttons">
+          {% if has_prev %}
+          <a class="btn" href="{{ url_for('admin_users', team=team_filter, page=page-1) }}">&lt; 上一页</a>
+          {% else %}
+          <span class="btn disabled">&lt; 上一页</span>
+          {% endif %}
+
+          {% if has_next %}
+          <a class="btn" href="{{ url_for('admin_users', team=team_filter, page=page+1) }}">下一页 &gt;</a>
+          {% else %}
+          <span class="btn disabled">下一页 &gt;</span>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 </body>
