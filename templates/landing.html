@@ -386,6 +386,23 @@
       white-space: nowrap;
       z-index: 1;
       text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .progress-spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(30, 41, 59, 0.3);
+      border-top-color: #1e293b;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
     .chat-area {
       flex: 1;
@@ -902,7 +919,16 @@
       
       const progressText = document.createElement("div");
       progressText.className = "progress-text";
-      progressText.textContent = "生成中0%，免费服务器，请耐心等待";
+      
+      // 创建转圈圈动画
+      const spinner = document.createElement("div");
+      spinner.className = "progress-spinner";
+      
+      // 创建文本节点
+      const textNode = document.createTextNode("生成进度0%，免费服务器速度慢，请耐心等待");
+      
+      progressText.appendChild(spinner);
+      progressText.appendChild(textNode);
       
       progressBg.appendChild(progressBar);
       progressBg.appendChild(progressText);
@@ -928,7 +954,11 @@
         if (currentProgress > 91) currentProgress = 91;
         
         progressBar.style.width = currentProgress + "%";
-        progressText.textContent = `生成中${Math.floor(currentProgress)}%，免费服务器，请耐心等待`;
+        // 更新文本内容（保留转圈圈）
+        const textNode = progressText.childNodes[1];
+        if (textNode) {
+          textNode.textContent = `生成进度${Math.floor(currentProgress)}%，免费服务器速度慢，请耐心等待`;
+        }
         
         timer = setTimeout(fastProgress, 200 + Math.random() * 300); // 200-500ms随机延迟
       }
@@ -940,7 +970,11 @@
         if (currentProgress > 99) currentProgress = 99;
         
         progressBar.style.width = currentProgress + "%";
-        progressText.textContent = `生成中${Math.floor(currentProgress)}%，免费服务器，请耐心等待`;
+        // 更新文本内容（保留转圈圈）
+        const textNode = progressText.childNodes[1];
+        if (textNode) {
+          textNode.textContent = `生成进度${Math.floor(currentProgress)}%，免费服务器速度慢，请耐心等待`;
+        }
         
         timer = setTimeout(slowProgress, 500 + Math.random() * 500); // 500-1000ms随机延迟
       }
@@ -956,8 +990,17 @@
               messageEl.parentNode.removeChild(messageEl);
             }
           } else {
-            // 失败时显示错误信息
-            progressText.textContent = "参与人过多，免费服务器带宽不足，麻烦重新加载试试";
+            // 失败时显示错误信息（移除转圈圈，只显示文本）
+            const spinner = progressText.querySelector(".progress-spinner");
+            if (spinner) {
+              spinner.remove();
+            }
+            const textNode = progressText.childNodes[0];
+            if (textNode) {
+              textNode.textContent = "参与人过多，免费服务器带宽不足，麻烦重新加载试试";
+            } else {
+              progressText.textContent = "参与人过多，免费服务器带宽不足，麻烦重新加载试试";
+            }
             progressBar.style.width = "100%";
             progressBar.style.background = "linear-gradient(90deg, #ef4444, #dc2626)";
           }
