@@ -25,6 +25,27 @@
       align-items: center;
       justify-content: center;
       padding: 14px;
+      position: relative;
+    }
+    .back-home-btn {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      padding: 10px 16px;
+      background: rgba(251, 191, 36, 0.9);
+      color: #0f172a;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      transition: all 0.2s ease;
+    }
+    .back-home-btn:hover {
+      background: rgba(251, 191, 36, 1);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
     }
     .app {
       width: 100%;
@@ -735,5 +756,8 @@
     }
     {% endif %}
   </script>
+  
+  <!-- 返回主页悬浮按钮 -->
+  <a href="/" class="back-home-btn">返回主页</a>
 </body>
 </html>

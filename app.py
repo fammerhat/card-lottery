@@ -1046,7 +1046,7 @@ def user_login_page():
         next_page = request.args.get("next")
         if next_page:
             return redirect(next_page)
-        return redirect(url_for("draw_page"))
+        return redirect(url_for("landing_page"))
 
     error = None
 
@@ -1131,7 +1131,7 @@ def user_login_page():
         next_page = request.args.get("next") or request.form.get("next")
         if next_page:
             return redirect(next_page)
-        return redirect(url_for("draw_page"))
+        return redirect(url_for("landing_page"))
 
     # GET 请求：检查是否有已存在的用户（通过 URL 参数或 session 判断）
     # 这里简化处理，直接显示选择框

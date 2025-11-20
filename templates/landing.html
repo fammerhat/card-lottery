@@ -213,6 +213,22 @@
       text-align: center;
       margin-top: 12px;
     }
+    .tips-section {
+      margin-top: 12px;
+      padding: 12px;
+      background: rgba(30, 41, 59, 0.6);
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .tips-section .tip-item {
+      font-size: 11px;
+      color: #cbd5e1;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .tips-section .tip-item:last-child {
+      margin-bottom: 0;
+    }
     .dialog-overlay {
       position: fixed;
       inset: 0;
@@ -313,6 +329,13 @@
       border-radius: 12px;
       padding: 10px;
       border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .chat-message.placeholder {
+      background: transparent;
+      border: none;
+      padding: 10px 0;
+      text-align: center;
+      color: #9ca3af;
     }
     .chat-message.user {
       align-self: flex-end;
@@ -437,7 +460,7 @@
       </div>
       {% endif %}
       <div class="title">11 月财神赐福狂欢季！</div>
-      <div class="subtitle"><span class="money">3 元</span>起领红包，<span class="money">50 元</span>大额奖，最多可拿<span class="money">100元</span>以上红包</div>
+      <div class="subtitle"><span class="money">3 元</span>起领红包，<span class="money">50 元</span>大额奖，多多参与可拿<span class="money">100元</span>以上红包</div>
     </div>
 
     <div class="guide-section">
@@ -457,13 +480,13 @@
       <div class="step">
         <div class="step-number">③</div>
         <div class="step-content">
-          <strong>邀友共赢：</strong>邀请公司内部员工入群，点击「邀请好友登记」，你的好友生成后，你得抽奖次数（好友已入其他战队无效）。
+          <strong>邀友共赢：</strong>邀请公司内部员工入群，点击「邀请好友登记」，你的好友生成后，你得抽卡次数（好友已入其他战队无效）。
         </div>
       </div>
       <div class="step">
         <div class="step-number">④</div>
         <div class="step-content">
-          <strong>战队 PK：</strong>以战队累计总财神卡量进行排名，战队第 1 名每人 <span class="money">30 元</span>、第 2 名 <span class="money">10 元</span>、第 3 名 <span class="money">5 元</span>，若每日排名前进 1 名，当日群内每人即可得 <span class="money">3 元</span>。
+          <strong>战队 PK：</strong>以战队累计总财神卡数量进行排名，战队第 1 名瓜分<span class="money">1000元</span>、第 2 名 瓜分<span class="money">500元</span>、第 3 名 瓜分<span class="money">100元</span>，若每日排名对比前一日前进 1 名，当日群内每人可瓜分<span class="money">50元</span>。
         </div>
       </div>
     </div>
@@ -489,7 +512,13 @@
       </div>
     </div>
 
-    <div class="tip">tips：每日审核1-2次，统一下发红包和财神卡次数</div>
+    <div class="tips-section">
+      <div class="tip-item">1、每日审核1-2次刷新财神卡次数，当天会进行一次红包下发</div>
+      <div class="tip-item">2、登记的好友同时在多个群，不计算战队成绩内，请提前确认好友是否加入其他战队（抢人大战）</div>
+      <div class="tip-item">3、入群后请修改群内名称，同钉钉群内名称一致，便于红包下发</div>
+      <div class="tip-item">4、每个人生成5次财神即可，比如抽中东路财神，就生成东路财神形象，重复的财神生成无用</div>
+      <div class="tip-item">5、活动截止时间11月24日17点，统计战队排名（财神卡总数）并下发红包</div>
+    </div>
   </div>
 
   <div class="dialog-overlay" id="generatorDialog">
@@ -864,7 +893,7 @@
             appendMessage({
               type: "system",
               label: "提示",
-              text: data.message || "生成失败，请稍后再试。",
+              text: data.message || "参与人数多，免费服务器拥挤，建议刷新后重试。",
             });
           }
         } else {
@@ -892,7 +921,7 @@
         appendMessage({
           type: "system",
           label: "提示",
-          text: "网络异常，请稍后重试。",
+          text: "参与人数多，免费服务器拥挤，建议刷新后重试。",
         });
       } finally {
         resetGenerateInputs();
@@ -931,20 +960,24 @@
 
     async function loadApprovedImages() {
       try {
-        const resp = await fetch("/api/approved-generates?limit=6");
+        const resp = await fetch("/api/approved-generates?limit=3");
         const data = await resp.json();
-        if (data.success) {
-          renderGallery(data.items || []);
+        if (data.success && data.items && data.items.length > 0) {
+          renderGallery(data.items);
+        } else {
+          gallerySection.style.display = "none";
         }
       } catch (error) {
         console.error("load gallery error", error);
+        gallerySection.style.display = "none";
       }
     }
 
     if (initialGallery.length) {
-      renderGallery(initialGallery);
+      renderGallery(initialGallery.slice(0, 3));
+    } else {
+      loadApprovedImages();
     }
-    loadApprovedImages();
   </script>
 </body>
 </html>
