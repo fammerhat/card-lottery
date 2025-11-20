@@ -1316,6 +1316,46 @@ def api_team_rank():
     )
 
 
+@app.route("/api/generate-quota", methods=["GET"])
+def api_generate_quota():
+    """获取用户当天的生成次数配额"""
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "NOT_LOGIN"}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "USER_NOT_FOUND"}), 404
+    
+    # 获取当天UTC时间范围（0:00 - 23:59:59）
+    today_utc = datetime.utcnow().date()
+    day_start = datetime.combine(today_utc, time(0, 0, 0))
+    day_end = datetime.combine(today_utc, time(23, 59, 59))
+    
+    # 查询当天成功生成的次数（dream_image_url不为空）
+    user_name_lower = (user.name or "").strip().lower()
+    today_count = (
+        db.session.query(func.count(GenerateRecord.id))
+        .filter(
+            func.lower(GenerateRecord.user_name) == user_name_lower,
+            GenerateRecord.dream_image_url.isnot(None),
+            GenerateRecord.created_at >= day_start,
+            GenerateRecord.created_at <= day_end,
+        )
+        .scalar() or 0
+    )
+    
+    max_quota = 5
+    remaining = max(0, max_quota - today_count)
+    
+    return jsonify({
+        "success": True,
+        "today_count": today_count,
+        "max_quota": max_quota,
+        "remaining": remaining,
+    })
+
+
 @app.route("/api/generate-figure", methods=["POST"])
 def api_generate_figure():
     prompt = (request.form.get("prompt") or "").strip()
@@ -1326,6 +1366,41 @@ def api_generate_figure():
         return jsonify({"success": False, "error": "PROMPT_REQUIRED"}), 400
     if not image_file:
         return jsonify({"success": False, "error": "IMAGE_REQUIRED"}), 400
+    
+    # 检查用户登录状态和生成配额
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "NOT_LOGIN"}), 401
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"success": False, "error": "USER_NOT_FOUND"}), 404
+    
+    # 获取当天UTC时间范围
+    today_utc = datetime.utcnow().date()
+    day_start = datetime.combine(today_utc, time(0, 0, 0))
+    day_end = datetime.combine(today_utc, time(23, 59, 59))
+    
+    # 查询当天成功生成的次数
+    user_name_lower = (user.name or "").strip().lower()
+    today_count = (
+        db.session.query(func.count(GenerateRecord.id))
+        .filter(
+            func.lower(GenerateRecord.user_name) == user_name_lower,
+            GenerateRecord.dream_image_url.isnot(None),
+            GenerateRecord.created_at >= day_start,
+            GenerateRecord.created_at <= day_end,
+        )
+        .scalar() or 0
+    )
+    
+    # 检查是否超过配额
+    if today_count >= 5:
+        return jsonify({
+            "success": False,
+            "error": "QUOTA_EXCEEDED",
+            "message": "您今天的生成额度已用完，明天再来！"
+        }), 400
 
     try:
         original_rel = save_and_compress_image(

@@ -262,7 +262,7 @@
       order: 2;
     }
     .dialog-recommend {
-      padding: 8px 16px 4px;
+      padding: 8px 16px;
       border-top: 1px solid rgba(148, 163, 184, 0.2);
       border-bottom: 1px solid rgba(148, 163, 184, 0.2);
       background: rgba(15, 23, 42, 0.95);
@@ -270,6 +270,10 @@
       order: 3;
       position: relative;
       z-index: 5;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
     }
     .recommend-btn {
       padding: 6px 10px;
@@ -277,6 +281,15 @@
       border: 1px solid rgba(148, 163, 184, 0.4);
       background: rgba(15, 23, 42, 0.8);
       color: #fbbf24;
+    }
+    .quota-hint {
+      font-size: 11px;
+      color: #cbd5e1;
+      text-align: center;
+    }
+    .quota-hint.exceeded {
+      color: #f87171;
+      font-weight: 600;
       font-size: 12px;
       cursor: pointer;
       width: 33%;
@@ -315,6 +328,14 @@
       width: 100%;
       border-radius: 10px;
       object-fit: cover;
+      -webkit-touch-callout: default;
+      user-select: none;
+    }
+    .chat-message .save-hint {
+      font-size: 10px;
+      color: #9ca3af;
+      text-align: center;
+      margin-top: 4px;
     }
     .chat-actions {
       display: flex;
@@ -482,6 +503,7 @@
       </div>
       <div class="dialog-recommend">
         <button class="recommend-btn" id="usePrompt">使用推荐口令</button>
+        <div class="quota-hint" id="quotaHint">您今天还有5次生成机会</div>
       </div>
       <div class="dialog-input">
         <label class="upload-btn" id="uploadTrigger">上传图片</label>
@@ -513,9 +535,42 @@
     const galleryTrack = document.getElementById("galleryTrack");
     const drawCardBtn = document.getElementById("drawCardBtn");
     const inviteFriendBtn = document.getElementById("inviteFriendBtn");
+    const quotaHint = document.getElementById("quotaHint");
 
     // 登录状态（从后端传递）
     const isLoggedIn = {{ 'true' if is_logged_in else 'false' }};
+    
+    // 获取生成配额
+    async function updateQuota() {
+      if (!isLoggedIn) {
+        quotaHint.textContent = "请先登录";
+        return;
+      }
+      try {
+        const resp = await fetch("/api/generate-quota");
+        const data = await resp.json();
+        if (data.success) {
+          const remaining = data.remaining;
+          if (remaining > 0) {
+            quotaHint.textContent = `您今天还有${remaining}次生成机会`;
+            quotaHint.className = "quota-hint";
+          } else {
+            quotaHint.textContent = "您今天的生成额度已用完，明天再来！";
+            quotaHint.className = "quota-hint exceeded";
+            sendBtn.disabled = true;
+            sendBtn.style.opacity = "0.6";
+            sendBtn.style.cursor = "not-allowed";
+          }
+        }
+      } catch (error) {
+        console.error("获取配额失败:", error);
+      }
+    }
+    
+    // 页面加载时获取配额
+    if (isLoggedIn) {
+      updateQuota();
+    }
 
     const RECOMMENDED_PROMPT = "帮我生成图片：用这张图片的脸生成一张Q版财神手办，材质为：黏土或羊毛毡或毛线，随机。财神穿汉服，戴帽子，可以有胡子，形象可以参考五路财神（比干、柴荣、关羽、赵公明、王亥，随机）。整体是喜庆风格，暖色调，背景有一些新年元素。有立体感，有光泽度，手办为全身完整，且有底座，手办的脸部特征要和原图的脸部高度相似，性别相同。一张正方形比例图片。";
 
@@ -546,7 +601,9 @@
       dialogOverlay.style.display = "flex";
       document.body.style.overflow = "hidden";
       ensureChatPlaceholder();
-      validateSendButton();
+      updateQuota().then(() => {
+        validateSendButton();
+      });
     }
     function closeDialog() {
       dialogOverlay.style.display = "none";
@@ -602,10 +659,16 @@
       validateSendButton();
     });
 
-    function validateSendButton() {
+    async function validateSendButton() {
       const hasImage = !!selectedFile;
       const hasPrompt = !!promptInput.value.trim();
-      const enabled = hasImage && hasPrompt;
+      // 检查配额（如果已登录）
+      let hasQuota = true;
+      if (isLoggedIn && quotaHint) {
+        const quotaHintText = quotaHint.textContent;
+        hasQuota = !quotaHintText.includes("已用完");
+      }
+      const enabled = hasImage && hasPrompt && hasQuota;
       sendBtn.disabled = !enabled;
       sendBtn.style.opacity = enabled ? "1" : "0.6";
       sendBtn.style.cursor = enabled ? "pointer" : "not-allowed";
@@ -615,7 +678,7 @@
       validateSendButton();
     });
 
-    function appendMessage({ type, label, text, imageUrl, actions }) {
+    function appendMessage({ type, label, text, imageUrl, actions, showSaveHint }) {
       const msg = document.createElement("div");
       msg.className = `chat-message ${type}`;
       if (label) {
@@ -633,6 +696,12 @@
         const img = document.createElement("img");
         img.src = imageUrl;
         msg.appendChild(img);
+        if (showSaveHint) {
+          const hint = document.createElement("div");
+          hint.className = "save-hint";
+          hint.textContent = "长按图片保存";
+          msg.appendChild(hint);
+        }
       }
       if (actions && actions.length) {
         const actionWrap = document.createElement("div");
@@ -784,11 +853,20 @@
         const data = await resp.json();
         if (!resp.ok || !data.success) {
           progress.finish(false);
-          appendMessage({
-            type: "system",
-            label: "提示",
-            text: data.message || "生成失败，请稍后再试。",
-          });
+          if (data.error === "QUOTA_EXCEEDED") {
+            appendMessage({
+              type: "system",
+              label: "提示",
+              text: data.message || "您今天的生成额度已用完，明天再来！",
+            });
+            updateQuota();
+          } else {
+            appendMessage({
+              type: "system",
+              label: "提示",
+              text: data.message || "生成失败，请稍后再试。",
+            });
+          }
         } else {
           progress.finish(true);
           lastPrompt = promptText;
@@ -797,24 +875,12 @@
           const resultMsg = appendMessage({
             type: "ai",
             label: "财神助手",
-            text: "这是你的财神手办，点击下方下载按钮，去群里分享吧！",
-            imageUrl: data.thumbnail_url,
-            actions: [
-              {
-                label: "下载图片",
-                onClick: () => {
-                  const link = document.createElement("a");
-                  link.href = data.dream_image_url;
-                  link.target = "_blank";
-                  link.click();
-                },
-              },
-              {
-                label: "重新生成",
-                onClick: () => sendGenerate(true),
-              },
-            ],
+            text: "这是你的财神手办，长按图片保存！",
+            imageUrl: data.dream_image_url || data.thumbnail_url,
+            showSaveHint: true,
           });
+          // 更新配额显示
+          updateQuota();
           // 滚动到生成结果
           setTimeout(() => {
             resultMsg.scrollIntoView({ behavior: "smooth", block: "end" });
