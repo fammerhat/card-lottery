@@ -330,18 +330,28 @@
     .progress-container {
       width: 100%;
       margin-top: 8px;
+      position: relative;
     }
     .progress-bar {
-      height: 8px;
+      height: 24px;
       background: linear-gradient(90deg, #fbbf24, #fb923c);
-      border-radius: 4px;
+      border-radius: 12px;
       transition: width 0.3s ease;
-      margin-bottom: 6px;
+      position: relative;
+      overflow: hidden;
+      width: 0%;
     }
     .progress-text {
-      font-size: 11px;
-      color: #cbd5e1;
-      text-align: center;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 12px;
+      color: #1e293b;
+      font-weight: 600;
+      white-space: nowrap;
+      z-index: 1;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
     }
     .chat-area {
       flex: 1;
@@ -841,6 +851,10 @@
       const progressContainer = document.createElement("div");
       progressContainer.className = "progress-container";
       
+      // 背景条（灰色背景，显示总进度）
+      const progressBg = document.createElement("div");
+      progressBg.style.cssText = "width: 100%; height: 24px; background: rgba(148, 163, 184, 0.2); border-radius: 12px; position: relative; overflow: hidden;";
+      
       const progressBar = document.createElement("div");
       progressBar.className = "progress-bar";
       progressBar.style.width = "0%";
@@ -849,10 +863,16 @@
       progressText.className = "progress-text";
       progressText.textContent = "生成中0%，免费服务器，请耐心等待";
       
-      progressContainer.appendChild(progressBar);
-      progressContainer.appendChild(progressText);
+      progressBg.appendChild(progressBar);
+      progressBg.appendChild(progressText);
+      progressContainer.appendChild(progressBg);
       messageEl.innerHTML = "";
       messageEl.appendChild(progressContainer);
+      
+      // 确保进度条在视野内可见
+      setTimeout(() => {
+        progressContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 100);
       
       let currentProgress = 0;
       let timer = null;
@@ -872,11 +892,11 @@
         timer = setTimeout(fastProgress, 200 + Math.random() * 300); // 200-500ms随机延迟
       }
       
-      // 91%之后缓慢增加到100%
+      // 91%之后缓慢增加到99%（最高99%）
       function slowProgress() {
-        if (currentProgress >= 100) return;
+        if (currentProgress >= 99) return;
         currentProgress += Math.random() * 2 + 0.5; // 0.5-2.5% 缓慢增长
-        if (currentProgress > 100) currentProgress = 100;
+        if (currentProgress > 99) currentProgress = 99;
         
         progressBar.style.width = currentProgress + "%";
         progressText.textContent = `生成中${Math.floor(currentProgress)}%，免费服务器，请耐心等待`;
@@ -890,11 +910,15 @@
         finish(success = true) {
           if (timer) clearTimeout(timer);
           if (success) {
-            currentProgress = 100;
-            progressBar.style.width = "100%";
-            progressText.textContent = "生成完成！";
+            // 生成成功后，移除整个进度条消息
+            if (messageEl && messageEl.parentNode) {
+              messageEl.parentNode.removeChild(messageEl);
+            }
           } else {
+            // 失败时显示错误信息
             progressText.textContent = "生成失败，请稍后重试。";
+            progressBar.style.width = "100%";
+            progressBar.style.background = "linear-gradient(90deg, #ef4444, #dc2626)";
           }
         },
       };
