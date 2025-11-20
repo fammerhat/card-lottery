@@ -25,6 +25,8 @@ from flask import (
     session,
     jsonify,
     Response,
+    flash,
+    get_flashed_messages,
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func, case
@@ -1217,12 +1219,16 @@ def landing_page():
         if user:
             user_name = user.name
     
+    # 获取 flash 消息
+    flash_messages = get_flashed_messages(with_categories=True)
+    
     return render_template(
         "landing.html",
         approved_images=approved_images,
         approved_gallery_data=approved_gallery_data,
         is_logged_in=is_logged_in,
         user_name=user_name,
+        flash_messages=flash_messages,
     )
 
 
@@ -1313,6 +1319,9 @@ def user_login_page():
         # 設定 7 天免登入
         session.permanent = True
         session["user_id"] = user.user_id
+        
+        # 设置登录成功提示
+        flash("登录成功！", "success")
         
         # 检查是否有目标页面
         next_page = request.args.get("next") or request.form.get("next")

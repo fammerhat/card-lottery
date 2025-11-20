@@ -58,6 +58,40 @@
     .login-status .login-name {
       font-weight: 600;
     }
+    .flash-message {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+      font-size: 14px;
+      font-weight: 600;
+      z-index: 100;
+      animation: slideDown 0.3s ease-out, fadeOut 0.3s ease-in 2.7s;
+      animation-fill-mode: both;
+      max-width: 90%;
+      text-align: center;
+    }
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    @keyframes fadeOut {
+      to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+      }
+    }
     .title {
       font-size: 22px;
       font-weight: 900;
@@ -489,6 +523,13 @@
 </head>
 <body>
   <div class="app">
+    {% if flash_messages %}
+      {% for category, message in flash_messages %}
+        {% if category == 'success' %}
+        <div class="flash-message" id="flashMessage">{{ message }}</div>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
     <div class="header">
       {% if is_logged_in %}
       <div class="login-status logged-in">
@@ -1159,6 +1200,13 @@
       renderGallery(initialGallery.slice(0, 3));
     } else {
       loadApprovedImages();
+    }
+    // 自动隐藏登录成功提示
+    const flashMessage = document.getElementById("flashMessage");
+    if (flashMessage) {
+      setTimeout(() => {
+        flashMessage.style.display = "none";
+      }, 3000); // 3秒后隐藏
     }
   </script>
 </body>
